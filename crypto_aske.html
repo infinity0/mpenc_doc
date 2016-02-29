@@ -1,0 +1,443 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>5.2.2. Authenticated Signature Key Exchange (ASKE) &mdash; Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/project.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1-4-g75e6b2d',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="copyright" title="Copyright" href="copyright.html" />
+    <link rel="top" title="Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d" href="index.html" />
+    <link rel="up" title="5. Cryptography" href="crypto.html" />
+    <link rel="next" title="6. Future work" href="future-work.html" />
+    <link rel="prev" title="5.2.1. Group Key Agreement (GKA)" href="crypto_gka.html" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            "HTML-CSS": {
+                // switch this off, it tends to make fonts too large
+                matchFontHeight: false,
+                // see https://docs.mathjax.org/en/v2.5-latest/options/HTML-CSS.html for valid values
+                // most other ones don't look so good with the surrounding sans-serif Sphinx text
+                availableFonts: ["Neo-Euler"],
+                preferredFont: "Neo-Euler",
+                webFont: "Neo-Euler",
+            },
+        });
+    </script>
+
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="future-work.html" title="6. Future work"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="crypto_gka.html" title="5.2.1. Group Key Agreement (GKA)"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="crypto.html" accesskey="U">5. Cryptography</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="authenticated-signature-key-exchange-aske">
+<h1>5.2.2. Authenticated Signature Key Exchange (ASKE)<a class="headerlink" href="#authenticated-signature-key-exchange-aske" title="Permalink to this headline">¶</a></h1>
+<p>As previously noted, we must authenticate the user&#8217;s membership in the session,
+as well as authenticate the content of their messages.  This could easily be
+accomplished by using static private keys to make signatures.  However, this
+destroys any chance that we might have in the future at retaining deniability
+(also known as repudiability) of ciphertext.  Once this property is lost, we
+can never regain it in a higher layer, and it is critical for <em>confidentiality
+of metadata</em>, so it is better to retain it here.</p>
+<p>Instead, we generate ed25519 ephemeral signing keys for each participant, to be
+used to authenticate messages for the current session only.  We also derive a
+session ID from participants&#8217; nonces to ensure freshness.  At the end of the
+session the ephemeral private signing key may be published to the transport,
+allowing for retrospective chat transcript alteration, and therefore allowing
+repudiation of the contents of transcripts presented post-session.  However,
+our mechanism <em>does not</em> provide deniability of the <em>participation</em> in the
+authenticated signature key exchange (ASKE) protocol.</p>
+<p>Our approach takes some loose inspiration from <a class="reference internal" href="references.html#dgka" id="id1">[06DGKA]</a> and <a class="reference internal" href="references.html#dske" id="id2">[13DSKE]</a>, and may
+also be compared with <a class="reference internal" href="references.html#spag" id="id3">[03SPAG]</a> and <a class="reference internal" href="references.html#sdgk" id="id4">[12SDGK]</a>.  Both are constructions to turn
+an unauthenticated GKA into an authenticated one.  The former construction is
+not deniable, whereas the latter is fully deniable (including participation in
+the session) but requires more advanced cryptography (ring signatures) that
+have not yet seen widespread usage.</p>
+<p>Our <a class="reference internal" href="crypto_gka.html"><em>GKA</em></a> protocol consists of an upflow (sequential collect)
+and downflow (broadcast) phase, whereas our ASKE protocol is a constant-round
+broadcast protocol, as are the other authenticated agreements referenced above.
+To make our <a class="reference internal" href="crypto.html"><em>combined protocol</em></a> easier to understand, the first
+broadcast round has been serialised into a &#8220;collection phase&#8221; upflow.  The
+first broadcast of the last member in the chain is the start of the downflow,
+which is followed by an acknowledgement broadcast by every other participant.
+Note that these latter broadcasts are not present in our group key agreement.</p>
+<p>ASKE consists of three phases.  First each participant generates a nonce and an
+ephemeral signature key pair, and forwards the nonce and public key (upflow).
+In the second phase &#8211; when in possession of all nonces &#8211; each member
+independently computes the shared session ID, and authenticates their ephemeral
+signing key and session ID using their static private key (downflow).  Lastly,
+each participant verifies all received acknowledgement messages.</p>
+<div class="section" id="initial-protocol-run">
+<h2>5.2.2.1. Initial Protocol Run<a class="headerlink" href="#initial-protocol-run" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="phase-1-collection">
+<h3>5.2.2.1.1. Phase 1 &#8211; Collection<a class="headerlink" href="#phase-1-collection" title="Permalink to this headline">¶</a></h3>
+<p>In the first phase the session initiator <span class="math">\(i\)</span> with the participant ID
+<span class="math">\(\mathsf{pid}_i\)</span> compiles an ordered list of all group members (their
+participant IDs).  Additionally an empty list for the all participants&#8217; nonces
+and ephemeral public keys is initialised.</p>
+<p>The initiator then generates a nonce <span class="math">\(k_i\)</span> and an ephemeral signature key
+pair <span class="math">\((e_i, E_i)\)</span>.  They add these to the nonces and public keys lists.
+They then send the participants&#8217; list (<span class="math">\(\mathsf{pid}_i\)</span>), nonces list
+(<span class="math">\(k_i\)</span>) and public keys list (<span class="math">\(E_i\)</span>) on to the next member in the
+list, who again generates a nonce and ephemeral signature key pair to send on.</p>
+<p>This phase ends with the last member in the list to add their contributions.
+This last member is the initiator of the second phase.</p>
+<p><strong>Example:</strong></p>
+<p>The following figure shows the sequence of upflow messages
+(<span class="math">\(u_i\)</span>) sent among four participants (<span class="math">\(p_i\)</span>).</p>
+<p class="graphviz">
+<img src="_images/graphviz-71f1c76f1b23bd310cba4498cfed54b245c94689.png" alt="digraph aske_upflow {
+layout=circo;
+size=2;
+node [style=filled, shape=circle];
+p1 -&gt; p2 [arrowhead=empty, color=blue, label=&quot;u1&quot;];
+p2 -&gt; p3 [arrowhead=empty, color=blue, label=&quot;u2&quot;];
+p3 -&gt; p4 [arrowhead=empty, color=blue, label=&quot;u3&quot;];
+p4 -&gt; p1 [style=invis];
+}" />
+</p>
+<dl class="docutils">
+<dt><span class="math">\(u1\)</span> contains:</dt>
+<dd><ul class="first last simple">
+<li>Participants: <span class="math">\((p1,\; p2,\; p3,\; p4)\)</span></li>
+<li>Nonces: <span class="math">\((k_1)\)</span></li>
+<li>Ephemeral public signing keys: <span class="math">\((E_1)\)</span></li>
+</ul>
+</dd>
+<dt><span class="math">\(u2\)</span> contains:</dt>
+<dd><ul class="first last simple">
+<li>Participants: <span class="math">\((p1,\; p2,\; p3,\; p4)\)</span></li>
+<li>Nonces: <span class="math">\((k_1,\; k_2)\)</span></li>
+<li>Ephemeral public signing keys: <span class="math">\((E_1,\; E_2)\)</span></li>
+</ul>
+</dd>
+<dt><span class="math">\(u3\)</span> contains:</dt>
+<dd><ul class="first last simple">
+<li>Participants: <span class="math">\((p1,\; p2,\; p3,\; p4)\)</span></li>
+<li>Nonces: <span class="math">\((k_1,\; k_2,\; k_3)\)</span></li>
+<li>Ephemeral public signing keys: <span class="math">\((E_1,\; E_2,\; E_3)\)</span></li>
+</ul>
+</dd>
+</dl>
+</div>
+<div class="section" id="phase-2-acknowledgement">
+<span id="aske-session-sig"></span><h3>5.2.2.1.2. Phase 2 &#8211; Acknowledgement<a class="headerlink" href="#phase-2-acknowledgement" title="Permalink to this headline">¶</a></h3>
+<p>The initiator of the downflow in the acknowledgement phase first constructs an
+authenticator message from their own contributions:</p>
+<div class="math">
+\[m_i = (\mathsf{CTX}||\mathsf{pid}_i||E_i||k_i||\mathsf{sid})\]</div>
+<p>Here, <span class="math">\(\mathsf{CTX}\)</span> is a fixed byte sequence to prevent the signature
+being used in another application; for this protocol version we use <code class="docutils literal"><span class="pre">acksig</span></code>.
+<span class="math">\(\mathsf{sid}\)</span> is the <em>session ID</em>, calculated from all participant IDs
+and nonces using a hash function <span class="math">\(H\)</span>:</p>
+<div class="math">
+\[\mathsf{sid} = H(\mathsf{pid}_1||\mathsf{pid}_2||\ldots||\mathsf{pid}_n||k_1||k_2||\ldots||k_n)\]</div>
+<p>The IDs and nonces must be strictly ordered.  For mpENC on the Mega platform
+the participant IDs are the full XMPP JIDs, and sorting is performed in lexical
+order.  The nonces are ordered so as to correspond to their participant IDs.</p>
+<p>Then, the initiator broadcasts the first message in the downflow, containing
+the now-completed lists of participants (<span class="math">\(\mathsf{pid}_i\)</span>), nonces
+(<span class="math">\(k_i\)</span>) and public keys (<span class="math">\(E_i\)</span>), for all <span class="math">\(i\)</span>, along with a
+signature of their own authenticator message <span class="math">\(\sigma_{s_i}(m_i)\)</span> computed
+with the static identity signature key <span class="math">\((s_i, S_i)\)</span>.  The purpose of this
+is to authenticate all information contributed by the signing participant, as
+well as what they believe the contributions of all session members to be.
+<a class="footnote-reference" href="#maut" id="id5">[1]</a>  Note that the authenticator message itself needs not be, and is not,
+broadcast.</p>
+<p>After receiving this, every participant is in possession of the information
+required to calculate the supposed <span class="math">\(\mathsf{sid}\)</span> for themselves, produce
+what each <span class="math">\(m_i\)</span> <em>should be</em> and verify the <span class="math">\(\sigma_{s_i}(m_i)\)</span> that
+it <em>should have</em> based on this information.</p>
+<p>Now, each participant computes the session ID (<span class="math">\(\mathsf{sid}\)</span>) from the
+content of this initial broadcast message, checking that the values supposedly
+contributed by them actually match what they output during the upflow phase.
+Then, they generate their own authenticator message, corresponding signature,
+and broadcast this signature to others.  The lists of intermediate values are
+not necessary in these further broadcasts.</p>
+<p><strong>Example:</strong></p>
+<p>The following figure shows the corresponding downflow message
+(<span class="math">\(d4\)</span>) broadcast to all participants by <span class="math">\(p4\)</span>.</p>
+<p class="graphviz">
+<img src="_images/graphviz-52474b0b79ac2d5303a4ad8402c13ee91a180fa3.png" alt="digraph aske_downflow {
+layout=circo;
+size=2;
+node [style=filled, shape=circle];
+p1 -&gt; p2 [style=invis];
+p2 -&gt; p3 [style=invis];
+p4 -&gt; {p1 p2 p3} [label=&quot;d4&quot;];
+}" />
+</p>
+<dl class="docutils">
+<dt><span class="math">\(d4\)</span> contains:</dt>
+<dd><ul class="first last simple">
+<li>Participants: <span class="math">\((p1,\; p2,\; p3,\; p4)\)</span></li>
+<li>Nonces: <span class="math">\((k_1,\; k_2,\; k_3,\; k_4)\)</span></li>
+<li>Ephemeral public signing keys: <span class="math">\((E_1,\; E_2,\; E_3,\; E_4)\)</span></li>
+<li>Session signature: <span class="math">\(\sigma_{s_4}(m_4)\)</span></li>
+</ul>
+</dd>
+</dl>
+<p>Upon receipt of <span class="math">\(d4\)</span> every other participant sends out an
+analogous <span class="math">\(dX\)</span> message including their <em>own</em> session signature.</p>
+<table class="docutils footnote" frame="void" id="maut" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id5">[1]</a></td><td>Although <span class="math">\(k_i\)</span> is already &#8220;contained in&#8221; the session ID, we
+explicitly add it to <span class="math">\(m_i\)</span>, to avoid depending on the security of its
+calculation. This is hoped to simplify any future formal analysis.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="phase-3-verification">
+<span id="aske-verification"></span><h3>5.2.2.1.3. Phase 3 &#8211; Verification<a class="headerlink" href="#phase-3-verification" title="Permalink to this headline">¶</a></h3>
+<p>This last phase does not require further messages to be sent.  Each participant
+verifies the content of each received acknowledgement broadcast message against
+their own available information.  The purpose is to have the assurance that all
+participants are actively participating (avoids replays) with a fresh session,
+and to have the assurance that the session&#8217;s ephemeral signing keys are really
+from the users that one is communicating with.</p>
+<p>More specifically, as each participant receives each subsequent downflow
+broadcast from <span class="math">\(\mathsf{pid}_i\)</span>, they compute <span class="math">\(m_i\)</span> from the same
+information used to compute their local value for <span class="math">\(\mathsf{sid}\)</span>, and
+verify the signature contained in the received message (which is supposed to be
+<span class="math">\(\sigma_{s_i}(m_i)\)</span>) using the sender&#8217;s long term static key <span class="math">\(S_i\)</span>.</p>
+<p>The protocol completes successfully when all session signatures from all other
+participants have been successfully verified against the local session ID and
+each participant&#8217;s static identity signature key.</p>
+<p>Following successful completion, <em>only</em> the ephemeral keys are needed for
+message authentication &#8211; signing with the static keys would effectively
+inhibit any plausible deniability.  However the static keys are needed for
+further changes to the session membership.</p>
+</div>
+</div>
+<div class="section" id="auxiliary-protocol-runs">
+<h2>5.2.2.2. Auxiliary Protocol Runs<a class="headerlink" href="#auxiliary-protocol-runs" title="Permalink to this headline">¶</a></h2>
+<p>Upon changing the participant composition of the chat (inclusions or exclusions
+of members) some session information changes: The list of participants, nonces
+and ephemeral signing keys.  Therefore, the session ID also changes.</p>
+<div class="section" id="member-inclusion">
+<h3>5.2.2.2.1. Member Inclusion<a class="headerlink" href="#member-inclusion" title="Permalink to this headline">¶</a></h3>
+<p>To include participants, the initiator extends the list of participants by the
+new participant(s).  A new collection (upflow) message is sent to the (first)
+new participant, including the <em>new</em> list of participants <span class="math">\(p_i\)</span> and
+<em>already existing</em> nonces <span class="math">\(k_i\)</span> and ephemeral signing keys <span class="math">\(E_i\)</span>.
+The collection upflow percolates through all new participants, and the last one
+will initiate a new acknowledgement downflow phase followed by a verification
+phase identically to the initial protocol flow as outlined above.</p>
+<p><strong>Example:</strong></p>
+<p>The following figure shows addition of a participant (<span class="math">\(p5\)</span>) &#8211; initiated
+by <span class="math">\(p1\)</span> &#8211; to the existing group of four participants.</p>
+<p class="graphviz">
+<img src="_images/graphviz-cb9c206ddea4b413f5ea418b8226e79be2921919.png" alt="digraph aske_include {
+layout=circo;
+size=2;
+ordering=out;
+node [style=filled, shape=circle];
+p5 [style=dashed];
+p1 -&gt; p2 -&gt; p3 -&gt; p4 [style=invis];
+p1 -&gt; p5 [arrowhead=empty, color=blue, label=&quot;u1'&quot;];
+p5 -&gt; {p1 p2 p3 p4} [label=&quot;d5'&quot;];
+}" />
+</p>
+<dl class="docutils">
+<dt><span class="math">\(u1'\)</span> contains:</dt>
+<dd><ul class="first last simple">
+<li>Participants: <span class="math">\((p1,\; p2,\; p3,\; p4,\; p5)\)</span></li>
+<li>Nonces: <span class="math">\((k_1,\; k_2,\; k_3,\; k_4)\)</span></li>
+<li>Ephemeral public signing keys: <span class="math">\((E_1,\; E_2,\; E_3,\; E_4)\)</span></li>
+</ul>
+</dd>
+<dt><span class="math">\(d5'\)</span> contains:</dt>
+<dd><ul class="first last simple">
+<li>Participants: <span class="math">\((p1,\; p2,\; p3,\; p4,\; p5)\)</span></li>
+<li>Nonces: <span class="math">\((k_1,\; k_2,\; k_3,\; k_4,\; k_5)\)</span></li>
+<li>Ephemeral public signing keys: <span class="math">\((E_1,\; E_2,\; E_3,\; E_4,\; E_5)\)</span></li>
+<li>Session signature: <span class="math">\(\sigma_{s_5}(m_5)\)</span></li>
+</ul>
+</dd>
+</dl>
+<p>After receiving this message, <span class="math">\(p1\)</span> through <span class="math">\(p4\)</span> will likewise
+broadcast their acknowledgement messages to all participants as well as verify
+all received session signatures <span class="math">\(\sigma_{s_i}(m_i)\)</span>.</p>
+</div>
+<div class="section" id="member-exclusion">
+<h3>5.2.2.2.2. Member Exclusion<a class="headerlink" href="#member-exclusion" title="Permalink to this headline">¶</a></h3>
+<p>On member exclusion, the process is simpler as it does not require a collection
+(upflow) phase, as all remaining participants have announced already.  The
+initiator of the exclusion removes the excluded participant(s) from the list of
+participants, and their respective nonces and ephemeral signing keys are as
+well removed.</p>
+<p>Importantly, the initiator <em>must</em> update their own nonce to prevent collisions
+in the session ID <span class="math">\(\mathsf{sid}\)</span> with a previous session ID consisting of
+the same set of participants.  They then compute a new session ID and session
+signature <span class="math">\(\sigma_{s_i}(m_i)\)</span> from these updated values, and used them to
+directly broadcast the initial downflow message to all remaining participants.
+Each of them again verifies all session signatures and broadcasts their own
+acknowledgement (if still outstanding).</p>
+</div>
+<div class="section" id="key-refresh">
+<h3>5.2.2.2.3. Key Refresh<a class="headerlink" href="#key-refresh" title="Permalink to this headline">¶</a></h3>
+<p>The concept of a key refresh for ASKE is currently not considered.</p>
+</div>
+</div>
+<div class="section" id="member-departure">
+<h2>5.2.2.3. Member Departure<a class="headerlink" href="#member-departure" title="Permalink to this headline">¶</a></h2>
+<p>As with our GKA, our ASKE does not include a <em>member departure</em> operation, this
+instead being handled in a different part of the wider protocol.</p>
+<p>In the future, our departure mechanism will include publishing the ephemeral
+signature key, to support a limited form of ciphertext deniability.  This is
+described more in <a class="reference internal" href="future-work.html#publish-sess-sig-keys"><span>Publish signature keys</span></a>.</p>
+</div>
+<div class="section" id="confirmation-of-the-shared-group-key">
+<h2>5.2.2.4. Confirmation of the Shared Group Key<a class="headerlink" href="#confirmation-of-the-shared-group-key" title="Permalink to this headline">¶</a></h2>
+<p>The ASKE mentioned above only protects the GKA against external attackers.  A
+malicious insider can cause different participants to generate different shared
+group keys.  We <em>could</em> protect against this by adding the shared group secret
+<span class="math">\(x_1 \dots x_nG\)</span> (or better, something derived from it) to the definition
+of <span class="math">\(m_i\)</span>. However, we currently omit this, for the following reasons:</p>
+<ul class="simple">
+<li>This would cause a key refresh to require everyone&#8217;s acknowledgement, adding
+an extra round to it.</li>
+<li>This attack does no more damage beyond &#8220;drop all messages&#8221;, which is already
+available to active transport attackers:<ul>
+<li>For authenticity of session membership, i.e. <em>entity authentication</em> or
+<em>freshness</em>, all participants are indeed part of the session, having
+participated in the ASKE and verified each others&#8217; session signatures. They
+just may have generated different encryption keys.</li>
+<li>For authenticity of message content: each ephemeral signature includes a
+hash of something derived from the group key, so one will never correctly
+verify-decrypt a message that was encrypted using a different group key
+from yours.</li>
+<li>For authenticity of message membership: our other checks (for reliability
+and consistency) will cause each side of a &#8220;split&#8221; to timeout and emit
+security warnings, because the other side was unable to acknowledge them.</li>
+</ul>
+</li>
+</ul>
+<p>However, it is not too much complexity to add such a feature, if the attack
+turns out to be a real problem.  Another benefit of adding the protection would
+be to make the above argument unnecessary, which reduces the complexity cost of
+analysing our protocol.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/Mega_logo_gradient.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">5.2.2. Authenticated Signature Key Exchange (ASKE)</a><ul>
+<li><a class="reference internal" href="#initial-protocol-run">5.2.2.1. Initial Protocol Run</a><ul>
+<li><a class="reference internal" href="#phase-1-collection">5.2.2.1.1. Phase 1 &#8211; Collection</a></li>
+<li><a class="reference internal" href="#phase-2-acknowledgement">5.2.2.1.2. Phase 2 &#8211; Acknowledgement</a></li>
+<li><a class="reference internal" href="#phase-3-verification">5.2.2.1.3. Phase 3 &#8211; Verification</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#auxiliary-protocol-runs">5.2.2.2. Auxiliary Protocol Runs</a><ul>
+<li><a class="reference internal" href="#member-inclusion">5.2.2.2.1. Member Inclusion</a></li>
+<li><a class="reference internal" href="#member-exclusion">5.2.2.2.2. Member Exclusion</a></li>
+<li><a class="reference internal" href="#key-refresh">5.2.2.2.3. Key Refresh</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#member-departure">5.2.2.3. Member Departure</a></li>
+<li><a class="reference internal" href="#confirmation-of-the-shared-group-key">5.2.2.4. Confirmation of the Shared Group Key</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="crypto_gka.html"
+                        title="previous chapter">5.2.1. Group Key Agreement (GKA)</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="future-work.html"
+                        title="next chapter">6. Future work</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/crypto_aske.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="future-work.html" title="6. Future work"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="crypto_gka.html" title="5.2.1. Group Key Agreement (GKA)"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="crypto.html" >5. Cryptography</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; <a href="copyright.html">Copyright</a> 2015, Mega Limited, Auckland, New Zealand.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

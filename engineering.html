@@ -1,0 +1,491 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>4. Engineering &mdash; Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/project.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1-4-g75e6b2d',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="copyright" title="Copyright" href="copyright.html" />
+    <link rel="top" title="Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d" href="index.html" />
+    <link rel="next" title="5. Cryptography" href="crypto.html" />
+    <link rel="prev" title="3. Protocol" href="protocol.html" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            "HTML-CSS": {
+                // switch this off, it tends to make fonts too large
+                matchFontHeight: false,
+                // see https://docs.mathjax.org/en/v2.5-latest/options/HTML-CSS.html for valid values
+                // most other ones don't look so good with the surrounding sans-serif Sphinx text
+                availableFonts: ["Neo-Euler"],
+                preferredFont: "Neo-Euler",
+                webFont: "Neo-Euler",
+            },
+        });
+    </script>
+
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="crypto.html" title="5. Cryptography"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="protocol.html" title="3. Protocol"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="engineering">
+<h1>4. Engineering<a class="headerlink" href="#engineering" title="Permalink to this headline">¶</a></h1>
+<p>In this chapter we describe the reference implementation of our protocol
+system, its architecture and core engineering concepts.</p>
+<p>For a distributed system, the only <em>requirement</em> for it to work is that the
+protocol is well-defined. However, protocols that support advanced features or
+give strong guarantees are inherently more complex. Some people may argue that
+the complexity is not worth the benefit, especially if it includes new ideas
+untested by existing protocols. Our hope is that a high-level description of an
+<em>implementation</em> will help moderate this over-estimation of the complexity.
+Another hope is that it will make audits and code reviews easier and faster.</p>
+<div class="section" id="public-interface">
+<h2>4.1. Public interface<a class="headerlink" href="#public-interface" title="Permalink to this headline">¶</a></h2>
+<p>We begin by observing that any implementation of any communications system must
+(a) do IO with the network; and (b) do IO with the user. In our system, we
+define the following interfaces for these purposes:</p>
+<dl class="docutils">
+<dt><code class="docutils literal"><span class="pre">Session</span></code> (interface)</dt>
+<dd>This models a group messaging session as described in <a class="reference internal" href="background.html"><em>Background</em></a>. It
+defines an interface for higher layers (e.g. the UI) to interact with, which
+consists of (a) one input method to send a message or change the session
+membership; (b) one output mechanism for the user to receive session events
+or security warnings; and (c) various query methods, such as to get its
+current membership, the stream of messages accepted so far, etc. <a class="footnote-reference" href="#sess" id="id1">[1]</a></dd>
+<dt><code class="docutils literal"><span class="pre">GroupChannel</span></code> (interface) [$]</dt>
+<dd>This represents a group transport channel. It defines an interface for higher
+layers (e.g. a <code class="docutils literal"><span class="pre">Session</span></code>) to interact with, which consists of (a) one input
+method to send a packet or change the channel membership; (b) one output
+mechanism to receive channel events; and (c) various query methods. Actions
+may be ignored by the transport or satisfied exactly once, possibly after we
+receive further channel events not by us. The transport is supposed to send
+events to all members in the same order, but members must verify this.</dd>
+</dl>
+<div class="line-block">
+<div class="line">[$] This component is specific to instant or synchronous messaging; ones
+<em>not</em> marked with this may be reused in an asynchronous messaging system.</div>
+</div>
+<p><code class="docutils literal"><span class="pre">Session</span></code> represents a logical view from one user; there is no distinction
+between &#8220;not in the session&#8221; vs. &#8220;in the session, and we are the only member&#8221;.
+By contrast, <code class="docutils literal"><span class="pre">GroupChannel</span></code> is our view of an external entity (the channel),
+and the analogous concepts for channel membership <em>are</em> distinct.</p>
+<p>So to use our library, an external application must:</p>
+<ol class="arabic simple">
+<li>Implement <code class="docutils literal"><span class="pre">GroupChannel</span></code> for the chosen transport, e.g. XMPP.</li>
+<li>Construct an instance of <code class="docutils literal"><span class="pre">HybridSession</span></code> (see below), passing an instance
+of (1) to it along with any other configuration options it wants.</li>
+<li>Hook the application UI into the API provided by <code class="docutils literal"><span class="pre">Session</span></code>. The transport
+layer may be ignored completely, since that is handled by our system.</li>
+</ol>
+<p>The last step may involve a lot of work if the application UI is too tightly
+coupled with the specifics of a particular protocol. But there is no way around
+this; a secure messaging protocol deals with concepts that are fundamentally
+different from insecure transport protocols, and we see this already by the
+difference between session and channel membership. Hopefully whoever does this
+work will architect their future software with greater foresight.</p>
+<p>The remainder of this document details the internals of our implementation; but
+knowledge beyond this point is not necessary merely to <em>use</em> our system.</p>
+<table class="docutils footnote" frame="void" id="sess" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>We do not define a lower (transport) interface in <code class="docutils literal"><span class="pre">Session</span></code> since
+implementations or subtypes may require a <em>particular</em> transport; we leave
+it to them to define what that is. For example, <code class="docutils literal"><span class="pre">HybridSession</span></code> requires
+a <code class="docutils literal"><span class="pre">GroupChannel</span></code> which makes it unsuitable for asynchronous messaging;
+but another subtype of <code class="docutils literal"><span class="pre">Session</span></code> might support that.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="session-architecture">
+<h2>4.2. Session architecture<a class="headerlink" href="#session-architecture" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal"><span class="pre">HybridSession</span></code> [$] is our main (and currently only) <code class="docutils literal"><span class="pre">Session</span></code>
+implementation. It contains several internal components:</p>
+<ul class="simple">
+<li>a <code class="docutils literal"><span class="pre">GroupChannel</span></code>, a transport client for communication with the network;</li>
+<li>a concurrency resolver, to gracefully prevent membership change conflicts;</li>
+<li>a component [*] that manages and runs membership operations and proposals;</li>
+<li>two components for the current and previous subsession; each contains:<ul>
+<li>a message encryptor/decryptor [*] for communicating with the session;</li>
+<li>a transcript data structure to hold accepted messages in the correct order;</li>
+<li>various liveness components to ensure reliability and consistency.</li>
+</ul>
+</li>
+</ul>
+<p><code class="docutils literal"><span class="pre">HybridSession</span></code> itself handles the various transport integration cases;
+creates and destroys subprocesses to run membership operations; and manages
+membership changes that are initiated by the local user, that require more
+tracking such as retries in the case of transport hiccups, etc.</p>
+<p>The receive handler roughly runs as follows. For each incoming channel event:</p>
+<ol class="arabic simple">
+<li>if it is a channel membership change, then react to as part of
+<a class="reference internal" href="protocol.html#transport-integration"><span>Transport integration</span></a>;</li>
+<li>else, if it is a membership operation packet:<ul>
+<li>if it is relevant to the concurrency resolver, pass it to that, which may
+cause an operation to start or finish (with success or failure);</li>
+<li>if an operation is ongoing, pass it to the subprocess running that;</li>
+<li>else reject the packet (i.e. don&#8217;t queue it for another try later).</li>
+</ul>
+</li>
+<li>else, try to verify-decrypt it as a message in the current subsession;<ul>
+<li>if the packet verifies but fails to be accepted into the transcript due
+to missing parents, put it in a queue <em>specific to this subsession</em>, to
+try this process again later (and similarly for the next case);</li>
+</ul>
+</li>
+<li>else, try to verify-decrypt it as a message in the previous subsession;</li>
+<li>else, put it on a queue, to try this process again later, in case it was
+received out-of-order and depends on missing packets to decrypt.</li>
+</ol>
+<p>The components that deal directly with cryptography are marked [*] above. These
+may be improved independently from the others, and from <code class="docutils literal"><span class="pre">HybridSession</span></code>. We
+may also replace the cryptographic primitives within each component &#8211; e.g. DH
+key exchange, signature schemes, hash functions and symmetric ciphers &#8211; as
+necessary, based on the recommendations of the cryptography community.</p>
+<p>For more technical details, see our API documentation <a class="reference internal" href="references.html#mpenc-api" id="id2">[mpenc-api]</a>.</p>
+</div>
+<div class="section" id="internal-components">
+<h2>4.3. Internal components<a class="headerlink" href="#internal-components" title="Permalink to this headline">¶</a></h2>
+<dl class="docutils">
+<dt><code class="docutils literal"><span class="pre">ServerOrder</span></code> [$]</dt>
+<dd>The concurrency resolver, used by <code class="docutils literal"><span class="pre">HybridSession</span></code> to enforce a consistent
+and context-preserving total ordering of membership operations. It tracks the
+results of older operations, whether we&#8217;re currently in an operation, and
+decides how to accept/reject proposals for newer operations.</dd>
+<dt><code class="docutils literal"><span class="pre">Greeter</span></code>, <code class="docutils literal"><span class="pre">Greeting</span></code> (interface) [$]</dt>
+<dd><p class="first"><code class="docutils literal"><span class="pre">Greeting</span></code> represents a multi-packet operation. It defines an interface
+with a packet-based transport consisting of (a) one input method to receive
+data packets; (b) one output mechanism to send data packets; and (c) various
+query methods, such as to get a <code class="docutils literal"><span class="pre">Future</span></code> for the operation&#8217;s result, a
+reference for the previous operation if there was one, the intended next
+membership, etc. Typically, this may be implemented as a state machine.</p>
+<p class="last"><code class="docutils literal"><span class="pre">Greeter</span></code> is a factory component for new <code class="docutils literal"><span class="pre">Greeting</span></code> instances, defined as
+an interface used by <code class="docutils literal"><span class="pre">HybridSession</span></code> that consists of some limited codec
+methods for initial/final packets of a group key agreement. Implementations
+of these methods may reasonably depend on state, such as the result of any
+previous operation, data about operations proposed by the local user but not
+yet accepted by the group, or a reference to an ongoing <code class="docutils literal"><span class="pre">Greeting</span></code>.</p>
+</dd>
+<dt><code class="docutils literal"><span class="pre">SessionBase</span></code></dt>
+<dd><p class="first">This is a partial <code class="docutils literal"><span class="pre">Session</span></code> implementation, for full implementations to
+build around (as <code class="docutils literal"><span class="pre">HybridSession</span></code> does). It enforces properties such as
+strong message ordering, reliability, and consistency, based on information
+from message parent references and using some of the components below.</p>
+<p>The component provides an interface with a packet-based transport consisting
+of (a) one input method to receive data packets; (b) one output mechanism to
+send data packets; and an interface with the UI consisting of (c) one output
+mechanism for the user to receive notices; (d) various action methods for the
+user to use, such as sending messages and ending the session; and (e) various
+query methods similar to those found in <code class="docutils literal"><span class="pre">Session</span></code>.</p>
+<p class="last">Unlike <code class="docutils literal"><span class="pre">Session</span></code> (a), we make no attempt to simplify <code class="docutils literal"><span class="pre">SessionBase</span></code> (d) to
+make it &#8220;nice to use&#8221;. The functionality is quite low-level and may change in
+the future; it is not meant for external clients of our system.</p>
+</dd>
+</dl>
+<p>Everything from here on are components of <code class="docutils literal"><span class="pre">SessionBase</span></code>; <code class="docutils literal"><span class="pre">HybridSession</span></code>
+does not directly interact with them (except <code class="docutils literal"><span class="pre">MessageLog</span></code>).</p>
+<dl class="docutils">
+<dt><code class="docutils literal"><span class="pre">MessageSecurity</span></code> (interface)</dt>
+<dd>This defines an interface for the authentication and encryption of messages.
+The interface is flexible enough to allow implementations to generate new
+keys based on older keys, and to implement automatic deletion rules for some
+of those keys as they age further.</dd>
+<dt><code class="docutils literal"><span class="pre">Transcript</span></code>, <code class="docutils literal"><span class="pre">MessageLog</span></code></dt>
+<dd><p class="first">These are append-only data structures that hold messages in causal order.</p>
+<p><code class="docutils literal"><span class="pre">Transcript</span></code> holds a causal ordering of all messages, including non-content
+messages used for flow control and other lower-level concerns. It provides
+basic query methods, and graph traversal and recursive merge algorithms. (The
+latter is for aiding future research topics, and directly used yet. It may be
+omitted in a time-constrained pragmatic reimplementation of our system.)</p>
+<p class="last"><code class="docutils literal"><span class="pre">MessageLog</span></code> is a <em>user-level</em> abstraction of <code class="docutils literal"><span class="pre">Transcript</span></code>; it linearises
+the underlying causal order for UX purposes, aggregates multiple transcripts
+together (from multiple subsessions), and filters out non-content messages
+whilst retaining causal ordering.</p>
+</dd>
+<dt><code class="docutils literal"><span class="pre">FlowControl</span></code></dt>
+<dd>This defines an interface that <code class="docutils literal"><span class="pre">SessionBase</span></code> consults on liveness issues,
+such as when to resend messages, how to handle duplicate messages, how to
+react to packets that have been buffered for too long, etc. The interface is
+designed to support using the same component across several <code class="docutils literal"><span class="pre">SessionBase</span></code>
+instances, in case one wishes to make decisions based on all of their states.
+The interface is private for the time being, since it is a bit unstructured
+and may be changed later to fix this and other imperfections.</dd>
+<dt><code class="docutils literal"><span class="pre">ConsistencyMonitor</span></code></dt>
+<dd>This tracks expected acknowledgements for abstract items, and issues warnings
+and/or tries to recover, if they are not received in a timely manner. It is
+used by <code class="docutils literal"><span class="pre">SessionBase</span></code> and (in the future) <code class="docutils literal"><span class="pre">ServerOrder</span></code>.</dd>
+<dt><code class="docutils literal"><span class="pre">PresenceTracker</span></code></dt>
+<dd>This tracks our and others&#8217; latest activity in a session, and issues warnings
+if these expire. This helps to detect drops by an unreliable transport or
+malicious attacker. It can send out heartbeats to prevent or recover from
+such situations, but this is optional since it has some bandwidth cost.</dd>
+</dl>
+</div>
+<div class="section" id="utilities">
+<h2>4.4. Utilities<a class="headerlink" href="#utilities" title="Permalink to this headline">¶</a></h2>
+<p>Our protocol system is built from components that act as independent processes,
+that react to inputs and generate outputs similar to the actor model. We build
+up a relatively simple framework for this intra-process IO, based on some
+low-level utilities. We&#8217;ll talk about these first.</p>
+<div class="section" id="low-level">
+<h3>4.4.1. Low-level<a class="headerlink" href="#low-level" title="Permalink to this headline">¶</a></h3>
+<p>For an input mechanism into a component that is decoupled from the source, we
+simply use a function, since this exists in all major languages, and already
+has the property that the callee doesn&#8217;t know who the caller is.</p>
+<p>For an output mechanism from a component that is decoupled from the target, we
+use a synchronous publish-subscribe pattern. There are other options; the main
+reason we choose this is that <em>how</em> we consume inputs (of a given type) changes
+often. For example: each new message adds a requirement that we do some extra
+things on future messages; in trial decryption, the set of possible options
+changes; etc. Pub-sub is ideal for these cases: we can subscribe new consumers
+when we need to, and define their behaviour and cancellation conditions close
+together in the source code.</p>
+<p>By contrast, other intra-process IO paradigms (e.g. channels) are mostly built
+around single consumers. Here, we&#8217;d have to collect all possible responses into
+the consumer, then add explicit state to control the activation of specific
+responses. This causes related concerns to be separated too much, and unrelated
+concerns to be grouped together too much, and the mechanisms for doing this are
+less standardised across common libraries.</p>
+<p>By <em>synchronous</em> we mean that the publisher executes subscriber callbacks in
+its own thread. There are reentrancy issues around this <a class="footnote-reference" href="#reen" id="id3">[2]</a>, but in our
+simple usage it makes reasoning about execution order more predictable, and
+means that we have no dependency on any specific external execution framework.</p>
+<p>For long-running user operations, we use <code class="docutils literal"><span class="pre">Future</span></code>s, which is the standard
+utility for this sort of asynchronous &#8220;function call&#8221;-like operation, that is
+expected to return some sort of response. In our system, a common pattern is
+for a <code class="docutils literal"><span class="pre">Future</span></code>&#8216;s lifetime to include several IO rounds between components.</p>
+<p>We chose to implement our own utilities for some of these things, to define
+them in a more abstract style that is inspired from functional programming
+languages. This allows us to write higher-order combinators, so that we can
+express complex behaviours more concisely and generally.</p>
+<dl class="docutils">
+<dt><code class="docutils literal"><span class="pre">Observable</span></code></dt>
+<dd><p class="first">A pair of functions (publish, subscribe) and some mutable tracking state,
+used to produce and consume items. The producer creates an instance of this,
+keeps (publish) private and gives (subscribe) to potential consumers. In a
+language that supports polymorphic types, we would have the following type
+definitions, written in Scala-like pseudocode:</p>
+<div class="highlight-scala"><div class="highlight"><pre><span class="k">type</span> <span class="kt">Cancel</span>             <span class="o">=</span> <span class="o">()</span> <span class="k">=&gt;</span> <span class="nc">Boolean</span>
+<span class="k">type</span> <span class="kt">Subscribe</span><span class="o">[</span><span class="kt">T</span>, <span class="kt">S</span><span class="o">]</span>    <span class="k">=</span> <span class="o">(</span><span class="n">T</span> <span class="k">=&gt;</span> <span class="n">S</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="nc">Cancel</span>
+<span class="k">type</span> <span class="kt">Publish</span><span class="o">[</span><span class="kt">T</span>, <span class="kt">S</span><span class="o">]</span>      <span class="k">=</span> <span class="n">T</span> <span class="k">=&gt;</span> <span class="nc">List</span><span class="o">[</span><span class="kt">S</span><span class="o">]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">T</span></code> is the type of the communicated item, and <code class="docutils literal"><span class="pre">S</span></code> is an optional type
+(default <code class="docutils literal"><span class="pre">()</span></code>, called <code class="docutils literal"><span class="pre">void</span></code> in some languages) that callbacks may want
+to pass back to the producer, to signal some sort of &#8220;status&#8221;. The return
+value of <code class="docutils literal"><span class="pre">Cancel</span></code> is whether the subscription was not already cancelled.</p>
+<p class="last">Even if absent from the language, having an idea on what types <em>ought</em> to be
+helps us to write combinators, e.g. to make a complex subscribe function
+(&#8220;run <code class="docutils literal"><span class="pre">A</span></code> after event <code class="docutils literal"><span class="pre">X</span></code> but run <code class="docutils literal"><span class="pre">B</span></code> instead if event <code class="docutils literal"><span class="pre">Y</span></code> happens
+first and run <code class="docutils literal"><span class="pre">A2</span></code> if event <code class="docutils literal"><span class="pre">X</span></code> happens after that&#8221;) or a complex cancel
+function (&#8220;cancel all in set <code class="docutils literal"><span class="pre">X</span></code> and if all of them were already cancelled
+then also cancel all in set <code class="docutils literal"><span class="pre">Y</span></code>&#8221;).</p>
+</dd>
+<dt><code class="docutils literal"><span class="pre">EventContext</span></code></dt>
+<dd>A utility that supports efficient prefix-matched subscriptions, so consumers
+can specify a filter for the items they&#8217;re interested in. The type signature
+of its public part is something like <code class="docutils literal"><span class="pre">_Prefix_[T]</span> <span class="pre">=&gt;</span> <span class="pre">Subscribe[T,</span> <span class="pre">S]</span></code>,
+pretending for now that <code class="docutils literal"><span class="pre">_Prefix_</span></code> is a real type.</dd>
+<dt><code class="docutils literal"><span class="pre">Timer</span></code></dt>
+<dd>Execute something in the future. Its type is simply <code class="docutils literal"><span class="pre">Subscribe[Time,</span> <span class="pre">Unit]</span></code>
+so that it can be used with combinators. When integrating our library into an
+application, one can simply write an adapter that satisfies this interface,
+for whichever execution framework is used.</dd>
+<dt><code class="docutils literal"><span class="pre">Future</span></code></dt>
+<dd>We only use these for user-level actions, so we don&#8217;t need many combinators
+for them. Standard libraries are adequate for our use cases, e.g. <code class="docutils literal"><span class="pre">Promise</span></code>
+(JS) or <code class="docutils literal"><span class="pre">defer.Deferred</span></code> (Python).</dd>
+</dl>
+<p>We also have more complex utilities such as <code class="docutils literal"><span class="pre">Monitor</span></code>, built on top of
+<code class="docutils literal"><span class="pre">Observable</span></code> and its friends, used to implement liveness and freshness
+behaviours. For more details, see the API documentation <a class="reference internal" href="references.html#mpenc-api" id="id4">[mpenc-api]</a>.</p>
+<table class="docutils footnote" frame="void" id="reen" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[2]</a></td><td><p class="first"><em>Reentrant publish</em> is when callbacks cause the producer to produce
+new items <em>whilst</em> they are being run. This can cause unintended behaviour,
+sometimes called an <em>interleaving hazard</em>, and is usually considered a bug.
+See also <em>§13.1. Sequential Interleaving Hazards</em> in <a class="reference internal" href="references.html#robo" id="id5">[06ROBO]</a>.</p>
+<p class="last"><em>Reentrant subscribe/cancel</em> is when subscriptions for the current producer
+are modified <em>whilst</em> we are running the callbacks for one of its items.
+The behaviour here must be precisely defined by the pub-sub system. For
+example, web DOM events define that <a class="reference external" href="https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/removeEventListener#Notes">cancels take affect from the current
+run</a>, but <a class="reference external" href="https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#Adding_a_listener_during_event_dispatch">subscribes only take effect from the next run</a>.</p>
+</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="high-level">
+<h3>4.4.2. High-level<a class="headerlink" href="#high-level" title="Permalink to this headline">¶</a></h3>
+<p>We define two interfaces (<em>trait</em> or <em>typeclass</em> in some languages) as a common
+pattern for our <a class="reference external" href="https://en.wikipedia.org/wiki/Actor_model">Actor</a>-like
+components to follow. Each interface is a (function, subscribe-function) pair.
+The former is to provide input into the component, the latter to accept output
+from it.</p>
+<p>One interface is for interacting with a more &#8220;high level&#8221; component, e.g. a
+user interface:</p>
+<div class="highlight-scala"><div class="highlight"><pre><span class="k">trait</span> <span class="nc">ReceivingSender</span><span class="o">[</span><span class="kt">SendInput</span>, <span class="kt">RecvOutput</span><span class="o">]</span> <span class="o">{</span>
+  <span class="k">def</span> <span class="n">send</span>   <span class="k">:</span> <span class="kt">SendInput</span> <span class="o">=&gt;</span> <span class="nc">Boolean</span>
+  <span class="k">def</span> <span class="n">onRecv</span> <span class="k">:</span> <span class="kt">Subscribe</span><span class="o">[</span><span class="kt">RecvOutput</span>, <span class="kt">Boolean</span><span class="o">]</span>
+    <span class="c1">// i.e. (RecvOutput =&gt; Boolean) =&gt; (() =&gt; Boolean)</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<p>For example, when the UI wants to send some things to our session, it passes
+this request to <code class="docutils literal"><span class="pre">Session.send</span></code>. To display things received from the session,
+it hooks into <code class="docutils literal"><span class="pre">Session.onRecv</span></code>.</p>
+<p>Another interface is for interacting with a more &#8220;low level&#8221; component, e.g. a
+transport client:</p>
+<div class="highlight-scala"><div class="highlight"><pre><span class="k">trait</span> <span class="nc">SendingReceiver</span><span class="o">[</span><span class="kt">RecvInput</span>, <span class="kt">SendOutput</span><span class="o">]</span> <span class="o">{</span>
+  <span class="k">def</span> <span class="n">recv</span>   <span class="k">:</span> <span class="kt">RecvInput</span> <span class="o">=&gt;</span> <span class="nc">Boolean</span>
+  <span class="k">def</span> <span class="n">onSend</span> <span class="k">:</span> <span class="kt">Subscribe</span><span class="o">[</span><span class="kt">SendOutput</span>, <span class="kt">Boolean</span><span class="o">]</span>
+    <span class="c1">// i.e. (SendOutput =&gt; Boolean) =&gt; (() =&gt; Boolean)</span>
+<span class="o">}</span>
+</pre></div>
+</div>
+<p>For example, when we want to tell a GKA session membership operation that we
+received a packet for it, we call <code class="docutils literal"><span class="pre">Greeting.recv</span></code>. To service its requests to
+send out response packets, we hooks into <code class="docutils literal"><span class="pre">Greeting.onSend</span></code>.</p>
+<p>Here are some examples of our components that implement the above interfaces:</p>
+<div class="highlight-scala"><div class="highlight"><pre><span class="k">trait</span> <span class="nc">Session</span>         <span class="k">extends</span> <span class="nc">ReceivingSender</span><span class="o">[</span><span class="kt">SessionAction</span>, <span class="kt">SessionNotice</span><span class="o">];</span>
+<span class="k">trait</span> <span class="nc">GroupChannel</span>    <span class="k">extends</span> <span class="nc">ReceivingSender</span><span class="o">[</span><span class="kt">ChannelAction</span>, <span class="kt">ChannelNotice</span><span class="o">];</span>
+<span class="k">trait</span> <span class="nc">Greeting</span>        <span class="k">extends</span> <span class="nc">SendingReceiver</span><span class="o">[</span><span class="kt">RawByteInput</span>, <span class="kt">RawByteOutput</span><span class="o">];</span>
+<span class="k">class</span> <span class="nc">SessionBase</span>     <span class="k">extends</span> <span class="nc">SendingReceiver</span><span class="o">[</span><span class="kt">RawByteInput</span>, <span class="kt">RawByteOutput</span><span class="o">];</span>
+
+<span class="k">type</span> <span class="kt">RawByteInput</span>     <span class="o">=</span> <span class="o">(</span><span class="nc">SenderAddr</span><span class="o">,</span> <span class="nc">Array</span><span class="o">[</span><span class="kt">Byte</span><span class="o">])</span>
+<span class="k">type</span> <span class="kt">RawByteOutput</span>    <span class="o">=</span> <span class="o">(</span><span class="nc">Set</span><span class="o">[</span><span class="kt">RecipientAddr</span><span class="o">],</span> <span class="nc">Array</span><span class="o">[</span><span class="kt">Byte</span><span class="o">])</span>
+</pre></div>
+</div>
+<p>These interfaces are also used privately too, to maintain a common style for
+the code architecture. For example <code class="docutils literal"><span class="pre">HybridSession</span></code> contains an implementation
+of <code class="docutils literal"><span class="pre">SendingReceiver[ChannelNotice,</span> <span class="pre">ChannelAction]</span></code>, but this is not exposed
+since it is just an implementation detail, and it is only meant to be linked
+with the associated <code class="docutils literal"><span class="pre">GroupChannel</span></code>.</p>
+<p>We define <code class="docutils literal"><span class="pre">S</span></code> for <code class="docutils literal"><span class="pre">Subscribe[T,</span> <span class="pre">S]</span></code> as <code class="docutils literal"><span class="pre">Boolean</span></code> in these interfaces for
+simplicity, meaning &#8220;the item was {accepted, rejected} by the consumer&#8221;. This
+allows us to detect errors &#8211; such as transport failures in sending messages,
+or trial decryption failures in receiving packets &#8211; but in a loosely-coupled
+way that discourages violation of the separation of layers. One reasonable
+extension for the future, is to use a 3-value logic to represent {accept, try
+later, reject}, which helps both of the previous cases.</p>
+<p>This concludes the overview of our reference implementation. All the code that
+is not mentioned here, is a straightforward application of software engineering
+principles or algorithm writing, as applied to our protocol design (previous
+chapter) and software design (this chapter). For more details, see the API
+documentation <a class="reference internal" href="references.html#mpenc-api" id="id8">[mpenc-api]</a> and/or source code.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/Mega_logo_gradient.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">4. Engineering</a><ul>
+<li><a class="reference internal" href="#public-interface">4.1. Public interface</a></li>
+<li><a class="reference internal" href="#session-architecture">4.2. Session architecture</a></li>
+<li><a class="reference internal" href="#internal-components">4.3. Internal components</a></li>
+<li><a class="reference internal" href="#utilities">4.4. Utilities</a><ul>
+<li><a class="reference internal" href="#low-level">4.4.1. Low-level</a></li>
+<li><a class="reference internal" href="#high-level">4.4.2. High-level</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="protocol.html"
+                        title="previous chapter">3. Protocol</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="crypto.html"
+                        title="next chapter">5. Cryptography</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/engineering.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="crypto.html" title="5. Cryptography"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="protocol.html" title="3. Protocol"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; <a href="copyright.html">Copyright</a> 2015, Mega Limited, Auckland, New Zealand.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

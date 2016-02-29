@@ -1,0 +1,389 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>5. Cryptography &mdash; Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/project.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1-4-g75e6b2d',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="copyright" title="Copyright" href="copyright.html" />
+    <link rel="top" title="Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d" href="index.html" />
+    <link rel="next" title="5.2.1. Group Key Agreement (GKA)" href="crypto_gka.html" />
+    <link rel="prev" title="4. Engineering" href="engineering.html" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            "HTML-CSS": {
+                // switch this off, it tends to make fonts too large
+                matchFontHeight: false,
+                // see https://docs.mathjax.org/en/v2.5-latest/options/HTML-CSS.html for valid values
+                // most other ones don't look so good with the surrounding sans-serif Sphinx text
+                availableFonts: ["Neo-Euler"],
+                preferredFont: "Neo-Euler",
+                webFont: "Neo-Euler",
+            },
+        });
+    </script>
+
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="crypto_gka.html" title="5.2.1. Group Key Agreement (GKA)"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="engineering.html" title="4. Engineering"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="cryptography">
+<h1>5. Cryptography<a class="headerlink" href="#cryptography" title="Permalink to this headline">¶</a></h1>
+<p>Here, we document the specifics of how we use and implement cryptography in our
+protocol, and describe the information contained in our packets.</p>
+<p>This is <em>not</em> an overview of our full protocol system. Beyond processing and
+generating packets, other algorithms and data structures must be implemented to
+ensure a coherent high-level understanding of the state of the session, and the
+ability to actively react to wider concerns such as liveness and consistency of
+session state. These latter topics are covered in <a class="reference internal" href="protocol.html"><em>Protocol</em></a>.</p>
+<div class="section" id="packet-overview">
+<h2>5.1. Packet overview<a class="headerlink" href="#packet-overview" title="Permalink to this headline">¶</a></h2>
+<p>Every packet in our protocol is a sequence of records, similar to HTTP headers.
+Each record has a type and a value, and some records may appear multiple times.</p>
+<p>There are two packet types: (a) packets part of a membership change operation,
+that we sometimes also call <em>greeting packets</em> or <em>greeting messages</em>; and (b)
+packets that represent a logical message written by members of the session.</p>
+<p>Both packet types include the following common records, that occur either at
+or near the start of the sequence, in order:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">MESSAGE_SIGNATURE</span></code> &#8211; This is a cryptographic signature for the rest of
+the packet. This is calculated differently for greeting and data packets,
+defined in the respective sections below.</li>
+<li><code class="docutils literal"><span class="pre">PROTOCOL_VERSION</span></code> &#8211; This indicates the protocol version being used, as a
+16-bit unsigned integer. Our current version is <code class="docutils literal"><span class="pre">0x01</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">MESSAGE_TYPE</span></code> &#8211; Indicates the packet type, <code class="docutils literal"><span class="pre">GREETING</span></code> or <code class="docutils literal"><span class="pre">DATA</span></code>.</li>
+</ul>
+</div>
+<div class="section" id="membership-changes">
+<h2>5.2. Membership changes<a class="headerlink" href="#membership-changes" title="Permalink to this headline">¶</a></h2>
+<p>Our membership change protocol consists of two subprotocols, one to derive an
+ephemeral encryption key and one to derive ephemeral signature keys.</p>
+<p>More modern protocols with better security properties exist, but ours is a
+simple approach using elementary cryptography only, which should be easier to
+understand and review. It will be improved later, but for now is adequate for
+our stated security goals, and was quick to implement.</p>
+<p>The subprotocols are described in the following chapters; please read these
+first. We introduce some terminology there, that is needed to understand the
+rest of this document.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="crypto_gka.html">5.2.1. Group Key Agreement (GKA)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="crypto_gka.html#initial-key-agreement-ika">5.2.1.1. Initial Key Agreement (IKA)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto_gka.html#auxiliary-key-agreement-aka">5.2.1.2. Auxiliary Key Agreement (AKA)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto_gka.html#member-departure">5.2.1.3. Member Departure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto_gka.html#updating-private-key-contributions">5.2.1.4. Updating Private Key Contributions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="crypto_aske.html">5.2.2. Authenticated Signature Key Exchange (ASKE)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="crypto_aske.html#initial-protocol-run">5.2.2.1. Initial Protocol Run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto_aske.html#auxiliary-protocol-runs">5.2.2.2. Auxiliary Protocol Runs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto_aske.html#member-departure">5.2.2.3. Member Departure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto_aske.html#confirmation-of-the-shared-group-key">5.2.2.4. Confirmation of the Shared Group Key</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="combined-authenticated-group-key-agreement">
+<h3>5.2.3. Combined authenticated group key agreement<a class="headerlink" href="#combined-authenticated-group-key-agreement" title="Permalink to this headline">¶</a></h3>
+<p>There are four operation types: <em>establish session</em>, <em>include member</em>, <em>exclude
+member</em> and <em>refresh group key</em>. Refresh may be thought of as a &#8220;no-op&#8221; member
+change and that is how our overall protocol system treats it. Each operation
+consists of the following stages:</p>
+<dl class="docutils">
+<dt>Protocol upflow (optional)</dt>
+<dd><p class="first">The protocol upflow consists of a series of directed messages; one user sends
+it to exactly one recipient, i.e. the next member in the <code class="docutils literal"><span class="pre">MEMBER</span></code> list of
+records. It is used to &#8220;collect&#8221; information from one member to the next. In
+a transport that <em>only</em> offers broadcast, the other recipients simply ignore
+packets not meant for them (i.e. the <code class="docutils literal"><span class="pre">DEST</span></code> record is not them).</p>
+<p>Every upflow message includes the records marked [1] from the summary below.
+The first upflow message also includes records marked [2], which contains
+metadata about the operation, used by the concurrency resolver.</p>
+<p class="last">This stage is not present for exclude or refresh operations.</p>
+</dd>
+<dt>Protocol downflow</dt>
+<dd><p class="first">The protocol downflow consists of a series of broadcast messages, sent to all
+recipients in the group. It is used to &#8220;distribute&#8221; information contributed
+by all participants (or derived therefrom) to all participants at once.</p>
+<p class="last">Every downflow message includes the records marked [c] from the summary
+below. The first downflow message also includes records marked [a], which
+contains information from everyone, collected during the upflow. If the
+operation has no upflow (e.g. exclude and refresh), the first downflow
+message also includes records marked [b].</p>
+</dd>
+</dl>
+<p>A greeting packet contains the following records, in order:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">MESSAGE_SIGNATURE</span></code>, <code class="docutils literal"><span class="pre">PROTOCOL_VERSION</span></code>, <code class="docutils literal"><span class="pre">MESSAGE_TYPE</span></code> &#8211; as above.</li>
+<li><code class="docutils literal"><span class="pre">GREET_TYPE</span></code> &#8211; What operation the packet is part of, as well as which
+stage of that operation the packet belongs to. <a class="footnote-reference" href="#gtyp" id="id1">[1]</a></li>
+<li><code class="docutils literal"><span class="pre">SOURCE</span></code> &#8211; User ID of the packet originator.</li>
+<li><code class="docutils literal"><span class="pre">DEST</span></code> (optional) &#8211; User ID of the packet destination; if omitted, it
+means this is a broadcast (i.e. downflow) packet.</li>
+<li><code class="docutils literal"><span class="pre">MEMBER</span></code> (multiple) &#8211; Participating member user IDs. This record appears
+<span class="math">\(n\)</span> times, once for each member participating in this operation, i.e.
+the set of members in the subsession that would be created on its success.
+This also defines the orders of participants in the upflow sequence.</li>
+<li>[a] <code class="docutils literal"><span class="pre">INT_KEY</span></code> (multiple) &#8211; Intermediate DH values for the GKA.</li>
+<li>[a] <code class="docutils literal"><span class="pre">NONCE</span></code> (multiple) &#8211; Nonces of each member for the ASKE.</li>
+<li>[a] <code class="docutils literal"><span class="pre">PUB_KEY</span></code> (multiple) &#8211; Ephemeral session public signing keys of each
+member.</li>
+<li>[b] <code class="docutils literal"><span class="pre">PREV_PF</span></code> &#8211; Packet ID of the final packet of the previously completed
+operation, or a random string if this is the first operation.</li>
+<li>[b] <code class="docutils literal"><span class="pre">CHAIN_HASH</span></code> &#8211; Chain hash corresponding to that packet, as calculated
+by the initiator of this operation. This allows joining members to calculate
+subsequent hashes of their own, to compare with others for consistency.</li>
+<li>[b] <code class="docutils literal"><span class="pre">LATEST_PM</span></code> (multiple) &#8211; References to the latest (logical, i.e. data)
+messages from the previous subsession that the initiator of this operation
+had seen, from when they initiated the operation.</li>
+<li>[c] <code class="docutils literal"><span class="pre">SESSION_SIGNATURE</span></code> &#8211; Authenticated <a class="reference internal" href="crypto_aske.html#aske-session-sig"><span>confirmation signature</span></a> for the ASKE, signed with the long-term identity key of
+the packet author.</li>
+</ul>
+<ol class="loweralpha simple">
+<li>Only for upflow messages and the first downflow message. During the upflow,
+this gets filled to a maximum of <span class="math">\(n\)</span> occurences.</li>
+<li>Only for the initial packet of any operation. These fields are ignored by
+the greeting protocol; instead they are used by the concurrency resolver.
+See <a class="reference internal" href="protocol.html#transport-integration"><span>Transport integration</span></a> and <a class="reference internal" href="references.html#msa-5h0" id="id2">[msa-5h0]</a> for details.</li>
+<li>Only for downflow messages, to confirm the ASKE keys.</li>
+</ol>
+<p><code class="docutils literal"><span class="pre">MESSAGE_SIGNATURE</span></code> is made by the ephemeral signing key and signs the byte
+sequence <span class="math">\(\mathsf{CTX} || \mathsf{S}\)</span>. <span class="math">\(\mathsf{CTX}\)</span> is a fixed
+byte sequence to prevent the signature being injected elsewhere; for greeting
+packets in this version, it is <code class="docutils literal"><span class="pre">greetmsgsig</span></code>. <span class="math">\(\mathsf{S}\)</span> is the byte
+sequence of all subsequent records, starting with <code class="docutils literal"><span class="pre">PROTOCOL_VERSION</span></code>.</p>
+<p>Even though this ephemeral key is not authenticated against any identity keys
+at the start of the operation, it is so by the end via <code class="docutils literal"><span class="pre">SESSION_SIGNATURE</span></code>.
+It is important not to allow ongoing operations to affect anything else in the
+overall session, until this authentication has taken place; our atomic design
+satisfies this security requirement.</p>
+<p>Likewise, members may corrupt the structure of packets as the operation runs,
+such as re-ordering the <code class="docutils literal"><span class="pre">MEMBER</span></code> list of records. However, there should be no
+security risk; inconsistent results will be detected via <code class="docutils literal"><span class="pre">SESSION_SIGNATURE</span></code>
+and cause a failure of the overall operation.</p>
+<table class="docutils footnote" frame="void" id="gtyp" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>The exact details may be viewed in the source code. The current
+values are vestiges from previous iterations of the protocol, where we did
+things differently and with more variation. A better approach would be to
+infer this from the other records that are already part of the message, and
+eliminate the redundant information, which may be set to incorrect values
+by malicious participants. This will be done in a later iteration.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section" id="messages">
+<h2>5.3. Messages<a class="headerlink" href="#messages" title="Permalink to this headline">¶</a></h2>
+<p>Once a subsession has been set-up after the completion of a membership change,
+members may exchange messages confidentially (using the shared group key) and
+authentically (using the ephemeral signing key).</p>
+<p>A data packet contains the following records, in order:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">SIDKEY_HINT</span></code> &#8211; A one byte hint, that securely gives the recipient an aid
+in efficiently selecting the decryption key for this message.</li>
+<li><code class="docutils literal"><span class="pre">MESSAGE_SIGNATURE</span></code>, <code class="docutils literal"><span class="pre">PROTOCOL_VERSION</span></code>, <code class="docutils literal"><span class="pre">MESSAGE_TYPE</span></code> &#8211; as above.</li>
+<li><code class="docutils literal"><span class="pre">MESSAGE_IV</span></code> &#8211; Initialisation vector for the symmetric block cipher. The
+cipher we choose is malleable, to give better deniability when we publish
+ephemeral signature keys, similar to OTR <a class="reference internal" href="references.html#otr-spec" id="id3">[OTR-spec]</a>.</li>
+<li><code class="docutils literal"><span class="pre">MESSAGE_PAYLOAD</span></code> &#8211; Ciphertext payload. The plaintext is itself a sequence
+of records, as follows:<ul>
+<li><code class="docutils literal"><span class="pre">MESSAGE_PARENT</span></code> (multiple) &#8211; References to the latest (logical, i.e.
+data) messages that the author had seen, when they wrote the message.</li>
+<li><code class="docutils literal"><span class="pre">MESSAGE_BODY</span></code> &#8211; UTF-8 encoded payload, the message content as written
+by the human author.</li>
+</ul>
+</li>
+</ul>
+<p><code class="docutils literal"><span class="pre">MESSAGE_SIGNATURE</span></code> is made by the ephemeral signing key and signs the byte
+sequence <span class="math">\(\mathsf{CTX} || H(\mathsf{sid} || \mathsf{gk}) || \mathsf{S}\)</span>.
+<span class="math">\(\mathsf{CTX}\)</span> is a fixed byte sequence to prevent the signature being
+injected elsewhere; for data packets in this version, it is <code class="docutils literal"><span class="pre">datamsgsig</span></code>.
+<span class="math">\(\mathsf{S}\)</span> is the byte sequence of all subsequent records, starting
+with <code class="docutils literal"><span class="pre">PROTOCOL_VERSION</span></code>.</p>
+<p>Since a single ephemeral signing key may be used across several subsessions,
+the <span class="math">\(H(\dots)\)</span> value ensures that each ciphertext is verifiably bound to
+a specific subsession. <a class="footnote-reference" href="#psig" id="id4">[2]</a> <span class="math">\(\mathsf{sid}\)</span> is the session ID (of the
+subsession) as determined from the ASKE, and <span class="math">\(\mathsf{gk}\)</span> is the
+encryption key derived from the GKA.</p>
+<p><strong>Padding</strong>. We use an opportunistic padding scheme that obfuscates the lower
+bits of the length of the message. This has not been analysed under an
+aggressive threat model, but is very simple and cannot possibly be harmful. The
+scheme is as follows:</p>
+<ul class="simple">
+<li>Define a baseline size <code class="docutils literal"><span class="pre">size_bl</span></code>. We have chosen 128 bytes for this, to
+accommodate the majority (e.g. see <a class="reference internal" href="references.html#mcic" id="id5">[08MCIC]</a>) of messages in chats, while
+still remaining a multiple of our chosen cipher&#8217;s block size of 16 bytes.</li>
+<li>The value of <code class="docutils literal"><span class="pre">MESSAGE_BODY</span></code> is prepended by a 16-bit unsigned integer (in
+big-endian encoding) indicating its size.</li>
+<li>Further zero bytes are appended up to <code class="docutils literal"><span class="pre">size_bl</span></code> bytes.</li>
+<li>If the payload is already larger than this, then we instead pad up to the
+next power-of-two multiple of <code class="docutils literal"><span class="pre">size_bl</span></code> (e.g. <code class="docutils literal"><span class="pre">2*size_bl</span></code>, <code class="docutils literal"><span class="pre">4*size_bl</span></code>,
+<code class="docutils literal"><span class="pre">8*size_bl</span></code>, etc) that can contain the payload.</li>
+</ul>
+<p><strong>Trial decryption</strong>. In general, at some points in time, it may be possible to
+receive a message from several different sessions. The <code class="docutils literal"><span class="pre">SIDKEY_HINT</span></code> record
+helps to efficiently determine the correct decryption key. We calculate it as
+<span class="math">\(H(\mathsf{sid} || \mathsf{gk})[0]\)</span>.</p>
+<p>Only the first byte of the hash value is used, so it is theoretically possible
+that values may collide and subsequent trials may be required to determine the
+correct keys to use. However, this should give a performance improvement in the
+majority of cases without sacrificing security.</p>
+<p>When we implement forward-secrecy ratchets, or when we move to transports that
+don&#8217;t provide explicit hints on the authorship of packets, this technique may
+be adapted further to select between the multiple decryption or authentication
+keys (respectively) that are available to verify-decrypt packets. Composing
+this with anonymity systems will need extra care however - if the hint values
+are the same for related messages, then attackers can identify messages sharing
+this relationship with greater probability. (This is the case with our scheme
+above, where we use the same value for all messages in a subsession.)</p>
+<table class="docutils footnote" frame="void" id="psig" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id4">[2]</a></td><td>When/if we come to publish ephemeral signature keys, we will also
+have to publish all <span class="math">\(H(\mathsf{sid} || \mathsf{gk})\)</span> values
+that were used by the key, to ensure that a forger can generate valid
+packets without knowing the group encryption keys.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="encoding-and-primitives">
+<h2>5.4. Encoding and primitives<a class="headerlink" href="#encoding-and-primitives" title="Permalink to this headline">¶</a></h2>
+<p>To encode our records, we use TLV (type, length, value) strings, similar to the
+OTR protocol. Messages are prepended with the fixed string <code class="docutils literal"><span class="pre">?mpENC:</span></code> followed
+by a base-64 encoded string of all concatenated TLV records, followed by <code class="docutils literal"><span class="pre">.</span></code>.
+Type and length in the TLV records are each two octets in big-endian encoding,
+whereas the value is exactly as many octets as indicated by the length.</p>
+<p>This encoding may change at a later date.</p>
+<p>The cryptographic primitives that we use are:</p>
+<ul class="simple">
+<li>Identity signature keys: <a class="reference external" href="http://ed25519.cr.yp.to/">ed25519</a></li>
+<li>Session exchange keys: <a class="reference external" href="http://cr.yp.to/ecdh.html">x25519</a></li>
+<li>Session signature keys: ed25519</li>
+<li>Message encryption: <a class="reference external" href="https://en.wikipedia.org/wiki/Advanced_Encryption_Standard">AES128</a> in <a class="reference external" href="https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Counter_.28CTR.29">CTR mode</a></li>
+<li>Message references, packet references, trial decryption hints: <a class="reference external" href="https://en.wikipedia.org/wiki/SHA-2">SHA256</a></li>
+<li>Key derivation: <a class="reference external" href="https://tools.ietf.org/html/rfc5869">HKDF</a>-SHA256</li>
+</ul>
+<p>These have generally been chosen to match a general security level of 128 bit
+of entropy on a symmetric block cipher. This is roughly equivalent to 256 bit
+key strength on elliptic curve public-key ciphers and 3072 bit key strength on
+traditional discrete logarithm problem based public-key ciphers (e.g. DSA).</p>
+<p>We may switch to a more modern block cipher at a future date, that is more
+easily implementable and verifiable in constant time.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/Mega_logo_gradient.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">5. Cryptography</a><ul>
+<li><a class="reference internal" href="#packet-overview">5.1. Packet overview</a></li>
+<li><a class="reference internal" href="#membership-changes">5.2. Membership changes</a><ul>
+<li><a class="reference internal" href="#combined-authenticated-group-key-agreement">5.2.3. Combined authenticated group key agreement</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#messages">5.3. Messages</a></li>
+<li><a class="reference internal" href="#encoding-and-primitives">5.4. Encoding and primitives</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="engineering.html"
+                        title="previous chapter">4. Engineering</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="crypto_gka.html"
+                        title="next chapter">5.2.1. Group Key Agreement (GKA)</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/crypto.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="crypto_gka.html" title="5.2.1. Group Key Agreement (GKA)"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="engineering.html" title="4. Engineering"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; <a href="copyright.html">Copyright</a> 2015, Mega Limited, Auckland, New Zealand.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>3. Protocol &mdash; Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/project.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1-4-g75e6b2d',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="copyright" title="Copyright" href="copyright.html" />
+    <link rel="top" title="Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d" href="index.html" />
+    <link rel="next" title="4. Engineering" href="engineering.html" />
+    <link rel="prev" title="2. Topics" href="topics.html" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            "HTML-CSS": {
+                // switch this off, it tends to make fonts too large
+                matchFontHeight: false,
+                // see https://docs.mathjax.org/en/v2.5-latest/options/HTML-CSS.html for valid values
+                // most other ones don't look so good with the surrounding sans-serif Sphinx text
+                availableFonts: ["Neo-Euler"],
+                preferredFont: "Neo-Euler",
+                webFont: "Neo-Euler",
+            },
+        });
+    </script>
+
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="engineering.html" title="4. Engineering"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="topics.html" title="2. Topics"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="protocol">
+<h1>3. Protocol<a class="headerlink" href="#protocol" title="Permalink to this headline">¶</a></h1>
+<p>Here we present an overview of our protocol, suggested runtime data structures
+and algorithms, with references to other external documents for more specific
+information about each subtopic.</p>
+<div class="section" id="session-overview">
+<h2>3.1. Session overview<a class="headerlink" href="#session-overview" title="Permalink to this headline">¶</a></h2>
+<p>A session is a local process from the point of view of <em>one member</em>. We don&#8217;t
+attempt to reason about nor represent an overall &#8220;group&#8221; view of a session; in
+general such views are not useful for <em>accurately</em> modelling, or implementing,
+security or distributed systems.</p>
+<p>A session, time-wise, contains a linear sequence of <em>session membership change</em>
+operations, that (if and when completed successfully) each create subsessions
+of static membership, where members may send messages to each other.</p>
+<p>Linearity is enforced through an acceptance mechanism, which is applied to the
+packets where members try to start or finish an operation. The sequence is also
+context-preserving, i.e. it is guaranteed that no other operations complete
+<em>between</em> when a member proposes one, and it being accepted by the group.</p>
+<p>Each accepted operation <span class="math">\(G\)</span> is initialised from (a) previous state (the
+result of the previous operation, or a null state if the first) that encodes
+the current membership <span class="math">\(M'\)</span> and any cryptographic values that <span class="math">\(G\)</span>
+needs such as ephemeral keys; and (b) the first packet of the operation, sent
+by a member of <span class="math">\(M'\)</span>, that defines the intended next membership <span class="math">\(M\)</span>.
+While <span class="math">\(G\)</span> is ongoing, members may send messages in the current subsession
+as normal, i.e. to <span class="math">\(M'\)</span>. <a class="footnote-reference" href="#atom" id="id1">[1]</a></p>
+<p><span class="math">\(G\)</span> may finish with success, upon which we atomically change to a new
+subsession for <span class="math">\(M\)</span>, and store the result state for the next operation; or
+with failure, upon which we destroy all temporary state related to <span class="math">\(G\)</span>,
+and continue using the existing subsession with membership <span class="math">\(M'\)</span>.</p>
+<p>After a successful change, the now-previous subsession (with membership
+<span class="math">\(M'\)</span>) enters a shutdown phase. This happens concurrently and
+independently of other parts of the session, such as messaging in the new
+subsession or subsequent membership change operations on top of <span class="math">\(M\)</span>.</p>
+<table class="docutils footnote" frame="void" id="atom" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Our first group key agreement implementation did not enforce atomic
+operations. This caused major problems when users would leave the channel
+at different times, e.g. if they disconnect or restart the application,
+since their GKA components would see different packets and reach different
+states. With atomic operations and our transport integration rules, an
+inconsistent state is only reached if the transport (e.g. chat server)
+behaves incorrectly. One of our goals is, that security warnings fire
+<em>only</em> when there is <em>actually</em> (or <em>likely</em> to be) a problem.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="group-key-agreement">
+<h2>3.2. Group key agreement<a class="headerlink" href="#group-key-agreement" title="Permalink to this headline">¶</a></h2>
+<p>Our group key agreement is composed of the following two subprotocols:</p>
+<ul class="simple">
+<li>a group DH exchange to generate a shared ephemeral secret encryption key, for
+confidentiality;</li>
+<li>a custom group key distribution protocol for per-member ephemeral public
+signature keys, for authenticity (of session membership) and freshness,
+piggy-backed onto the same packets as the group DH packets.</li>
+</ul>
+<p>The keys are used to read/write messages in the subsession created by the
+operation. Identity secrets are <em>not</em> needed for this, but they are needed for
+participating in further membership changes (i.e. creating new subsessions).</p>
+<p>For the overall protocol, the number of communication rounds is <span class="math">\(O(n)\)</span> in
+the number of members. The average size of GKA packets is also <span class="math">\(O(n)\)</span>.
+More modern protocols have <span class="math">\(O(1)\)</span> rounds but retain <span class="math">\(O(n)\)</span> packet
+size. However, our protocol is a simple first approach using elementary
+cryptography only, which should be easier to understand and review.</p>
+<p>This component may be upgraded or replaced independently of the other parts of
+our protocol system. For example, more modern techniques make the key agreement
+itself deniable via a zero-knowledge proof. We have skipped that for now to
+solve higher-priority concerns first, and because implementing such protocols
+correctly is more tricky. This is discussed further in <a class="reference internal" href="future-work.html"><em>Future work</em></a>.</p>
+</div>
+<div class="section" id="transport-integration">
+<span id="id2"></span><h2>3.3. Transport integration<a class="headerlink" href="#transport-integration" title="Permalink to this headline">¶</a></h2>
+<p>We have the initial packet of each operation, reference the final packet of the
+previous finished operation (or null if the first). Likewise, the final packet
+of each operation references (perhaps implicitly, if this is secure) a specific
+initial packet. The concurrency resolver simply accepts the earliest packet in
+the channel with a given parent reference, and rejects other such packets. We
+also define a <em>chain hash</em> built from the sequence of accepted packets, that
+members verify the consistency of after each operation finishes.</p>
+<p>The advantage of this <em>implicit</em> agreement is that it has zero bandwidth cost,
+generalises to <em>any</em> membership change protocol, and does not depend on the
+liveness of a particular member as it would if we had an explicit leader.</p>
+<p>There are further details and cases in both the algorithm and implementation.
+For example, we have additional logic to handle new members who don&#8217;t know the
+previous operation, and define a general method to authenticate the parent
+references. We also arrange the code carefully to behave correctly for 1-packet
+operations, where the packet acts both as an initial and a final packet in our
+definitions above.</p>
+<p>To cover the other <a class="reference internal" href="topics.html#distributed-systems"><span>Distributed systems</span></a> cases, we also have a system of
+rules on how to react to various channel and session events. These work roughly
+along these principles:</p>
+<ul class="simple">
+<li>Every operation&#8217;s target members (i.e. joining members and remaining members)
+must all be in the channel to see the first packet (otherwise it is ignored)
+and remain there for the duration of the operation (otherwise it auto-fails).</li>
+<li>Members that leave the channel are automatically excluded from the session,
+and vice versa. There are subrules to handle events that conflict with this
+auto-behaviour, that might occur before those behaviours are applied.</li>
+<li>We never initiate membership operations to exclude ourselves. When we want to
+part the session, we initiate a shutdown process on the subsession, wait for
+it to finish, then leave the channel. When others exclude us, we wait for
+them to kick us from the channel, if and after the operation succeeds. Either
+way, we switch to a &#8220;null/solo&#8221; subsession only <em>after</em> leaving the channel.</li>
+</ul>
+<p>For full details of our agreement mechanism, our transport integration rules,
+and the rationale for them, along with more precise descriptions of our model
+for a general <span class="math">\(G\)</span> and of a group transport channel, see <a class="reference internal" href="references.html#msa-5h0" id="id3">[msa-5h0]</a>.</p>
+</div>
+<div class="section" id="message-ordering">
+<h2>3.4. Message ordering<a class="headerlink" href="#message-ordering" title="Permalink to this headline">¶</a></h2>
+<p>As discussed <a class="reference internal" href="topics.html#distributed-systems"><span>previously</span></a> and elsewhere <a class="reference internal" href="references.html#msg-2i0" id="id4">[msg-2i0]</a>
+messages may be sent concurrently even in a group transport channel, and so we
+represent the transcript of messages as a cryptographic causal order. We take
+much inspiration from <a class="reference external" href="https://git-scm.com/">Git</a> and OldBlue <a class="reference internal" href="references.html#oblu" id="id5">[12OBLU]</a> for our ideas.</p>
+<p>Every message has an explicit set of references to the latest other messages
+(&#8220;parents&#8221;) seen by the author when they wrote the message. These references
+are hashes of each packet, which require no extra infrastructure to generate or
+resolve. When we decrypt and verify a packet, we verify the author of these
+references as well. This allows us to ignore the order of packet receipt, and
+instead construct our ordering by following these references. If we receive a
+packet out-of-order, i.e. if we haven&#8217;t yet received all of its parents, we
+simply defer processing of it until we have received them.</p>
+<p>References must at least be second-preimage-resistant, with the pre-image being
+some function of the <em>full</em> verified-decrypted referent message (i.e. content,
+parents, author and readers), so that all members interpret them consistently.</p>
+<p>Our definition based on hashing packet ciphertext, together with using a shared
+group encryption key, guarantees the above property for our case. However to be
+precise, it is important to note that such references are only claims. Their
+truth is susceptible to lying; the claimant may:</p>
+<ul class="simple">
+<li>make false claims, i.e. refer to messages they haven&#8217;t seen; second pre-image
+resistance gives <em>some</em> protection here, but an attacker could e.g. reuse a
+hash value that they saw from another member;</li>
+<li>make false omissions, i.e. not refer to messages that they have seen.</li>
+</ul>
+<p>We have rules that enforce some logical consistency across references:</p>
+<ul class="simple">
+<li>a message&#8217;s parents must form an anti-chain, i.e. none of these parents may
+directly or indirectly (via intermediate messages) reference each other;</li>
+<li>an author&#8217;s own messages must form a total order (line).</li>
+</ul>
+<p>This gives some protection against arbitrary lies, but it is still possible to
+lie within these constraints. Nevertheless, we omit protection for the latter,
+since we believe that there is no benefit for an attacker to make such lies,
+and that the cost of any solution would not be worth the minor extra security.</p>
+<p>For a more detailed exploration, including tradeoffs of the <em>defer processing</em>
+approach to strong ordering, and ways to calculate references to have better
+resistance against false claims, see <a class="reference internal" href="references.html#msg-2o0" id="id6">[msg-2o0]</a>.</p>
+</div>
+<div class="section" id="reliability-and-consistency">
+<h2>3.5. Reliability and consistency<a class="headerlink" href="#reliability-and-consistency" title="Permalink to this headline">¶</a></h2>
+<p>Due to our strong ordering property, we can interpret parent references as an
+implicit acknowledgement (&#8220;ack&#8221;) that the author received every parent. Based
+on this, we can ensure end-to-end reliability and consistency. We take much
+inspiration from the core ideas of <a class="reference external" href="https://en.wikipedia.org/wiki/Transmission_Control_Protocol">TCP</a>.</p>
+<p>We require every message (those we write, <em>and</em> those we read) to be acked by
+all (other) readers; if we don&#8217;t observe these within a timeout, we warn the
+user. We may occasionally resend the packets of those messages (the subjects of
+such warnings), including those authored by others. Resends are all based on
+implicit conditions; we have no explicit resend requests as in OldBlue.</p>
+<p>To ensure we ack everything that everyone wrote, we also occassionally send
+acks automatically outside of the user&#8217;s control. Due to strong ordering, acks
+are transitive (i.e. implicitly ack all of its ancestors) and thus auto-acks
+can be delayed to &#8220;batch&#8221; ack several messages at once and reduce volume.</p>
+<p>We develop some extra details to avoid perpetual reacking-of-acks, yet ensure
+that the final messages of a session, or of a busy period within a session, are
+actually fully-acked. We also include a formal session shutdown process.</p>
+<p>For a more detailed exploration, including resend algorithms, timing concepts,
+different ack semantics, why we must have end-to-end authenticated reliability
+instead of &#8220;just using TCP&#8221;, the distinction between consistency and consensus,
+and more, see <a class="reference internal" href="references.html#msg-2c0" id="id7">[msg-2c0]</a>.</p>
+</div>
+<div class="section" id="message-encryption">
+<h2>3.6. Message encryption<a class="headerlink" href="#message-encryption" title="Permalink to this headline">¶</a></h2>
+<p>For now, message encryption is very simple. Each subsession has a constant set
+of keys (the output of the group key exchange) that are used to authenticate
+and encrypt all messages in it &#8211; one encryption key shared across all members,
+and one signature key for each member, with the public part shared with others.</p>
+<p>Every message is encrypted using the shared encryption key, then signed by the
+author using their own private signature key. To decrypt, the recipient first
+verifies the signature, then decrypts the ciphertext.</p>
+<p>These are constant throughout the session, so that if the shared encryption key
+is broken, the confidentiality of message content is lost. In the future, we
+will experiment with implementing this component as a forward secrecy ratchet.
+Note that we already have forward secrecy <em>between</em> subsessions.</p>
+<p>There is also the option to add a weak form of deniability, where authenticity
+of message contents are deniable, but authenticity of session participation is
+not. This is essentially the group analogue of how deniability is achieved in
+OTR <a class="reference internal" href="references.html#otr-spec" id="id8">[OTR-spec]</a>, and has equivalent security. (As mentioned before, making the
+group key agreement itself deniable is stronger, but more complex to achieve.)
+These directions are discussed further in <a class="reference internal" href="future-work.html"><em>Future work</em></a>.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/Mega_logo_gradient.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">3. Protocol</a><ul>
+<li><a class="reference internal" href="#session-overview">3.1. Session overview</a></li>
+<li><a class="reference internal" href="#group-key-agreement">3.2. Group key agreement</a></li>
+<li><a class="reference internal" href="#transport-integration">3.3. Transport integration</a></li>
+<li><a class="reference internal" href="#message-ordering">3.4. Message ordering</a></li>
+<li><a class="reference internal" href="#reliability-and-consistency">3.5. Reliability and consistency</a></li>
+<li><a class="reference internal" href="#message-encryption">3.6. Message encryption</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="topics.html"
+                        title="previous chapter">2. Topics</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="engineering.html"
+                        title="next chapter">4. Engineering</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/protocol.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="engineering.html" title="4. Engineering"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="topics.html" title="2. Topics"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; <a href="copyright.html">Copyright</a> 2015, Mega Limited, Auckland, New Zealand.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

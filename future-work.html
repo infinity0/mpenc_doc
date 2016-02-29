@@ -1,0 +1,353 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>6. Future work &mdash; Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/project.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1-4-g75e6b2d',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="copyright" title="Copyright" href="copyright.html" />
+    <link rel="top" title="Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d" href="index.html" />
+    <link rel="next" title="7. References" href="references.html" />
+    <link rel="prev" title="5.2.2. Authenticated Signature Key Exchange (ASKE)" href="crypto_aske.html" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            "HTML-CSS": {
+                // switch this off, it tends to make fonts too large
+                matchFontHeight: false,
+                // see https://docs.mathjax.org/en/v2.5-latest/options/HTML-CSS.html for valid values
+                // most other ones don't look so good with the surrounding sans-serif Sphinx text
+                availableFonts: ["Neo-Euler"],
+                preferredFont: "Neo-Euler",
+                webFont: "Neo-Euler",
+            },
+        });
+    </script>
+
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="references.html" title="7. References"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="crypto_aske.html" title="5.2.2. Authenticated Signature Key Exchange (ASKE)"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="future-work">
+<h1>6. Future work<a class="headerlink" href="#future-work" title="Permalink to this headline">¶</a></h1>
+<p>Here, we discuss tasks for the future, adding functionality and building on our
+existing security properties.</p>
+<div class="section" id="immediate">
+<h2>6.1. Immediate<a class="headerlink" href="#immediate" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="missing-properties">
+<h3>6.1.1. Missing properties<a class="headerlink" href="#missing-properties" title="Permalink to this headline">¶</a></h3>
+<p>Some of the security mechanisms that we have described, have not actually been
+implemented yet. We list them below. We have delayed them because we consider
+them to be less-critical security properties, and wanted to focus on making our
+implementation work reliably enough to start testing. However, we recognise
+their importance at providing end-to-end guarantees; none of them are expected
+to be hard to achieve, and solution outlines have already been sketched out.</p>
+<dl class="docutils">
+<dt>Error and abort messages</dt>
+<dd><p class="first">We should add the ability to abort a membership change, either manually or
+automatically after a timeout. Currently if someone disconnects, others will
+be left waiting until they themselves leave the channel. This must be done
+via an explicit &#8220;abort&#8221; packet that gets handled by the concurrency resolver,
+to prevent races between members.</p>
+<p class="last">For liveness properties, we already have timeouts that emit local security
+warnings if good conditions are not reached after a certain time. However,
+user experience will benefit if we have explicit error messages that inform
+other members of conditions such as &#8220;inconsistent history&#8221;, that <em>fail-fast</em>
+more quickly than our generous default timeouts.</p>
+</dd>
+<dt>Server-order consistency checks</dt>
+<dd><p class="first">We need to implement consistency checks for accepted operations, since we use
+the server&#8217;s packet ordering. This is similar to our consistency checks for
+messages: expect everyone to send authenticated acks to confirm their view of
+all previous operations. Further, the parent reference contained within the
+initial packet must also be authenticated by the initiator.</p>
+<p class="last">Together, these prevent the server from re-ordering operations <em>completely</em>
+arbitrarily. However, given a set of concurrent operations with the same
+authenticated parent, it is still able to choose which one is accepted, by
+broadcasting that one first. Given other constraints, we think this security
+tradeoff is acceptable. <a class="footnote-reference" href="#rtry" id="id1">[1]</a></p>
+</dd>
+<dt>Flow control</dt>
+<dd>We need recovery (automatic resends) for dropped messages, and heartbeats to
+verify in-session freshness. (We already have security warnings for messages
+received out-of-order.) This is already implemented in a non-production-ready
+Python prototype, with random integration tests, and only needs to be ported.</dd>
+</dl>
+<dl class="docutils" id="publish-sess-sig-keys">
+<dt>Publish signature keys</dt>
+<dd><p class="first">We need to make signature-key publishing logic work properly, so that we have
+deniable authentication for message content.</p>
+<p>Roughly, once a member makes a subsession shutdown request (<code class="docutils literal"><span class="pre">FIN</span></code>), they
+may publish their signature key after everyone acks this request. This is
+safe (i.e. an attacker cannot reuse the key to forge messages), if we enforce
+that one may not author messages <em>after</em> a <code class="docutils literal"><span class="pre">FIN</span></code>, i.e. all receivers must
+refuse to accept such messages. However, this simple approach destroys our
+ability to authenticate our own acks of others&#8217; messages (e.g. <em>their</em>
+<code class="docutils literal"><span class="pre">FIN</span></code>) after we send our own <code class="docutils literal"><span class="pre">FIN</span></code>. So we&#8217;ll need something a bit more
+complex, and we haven&#8217;t worked out the details yet.</p>
+<p class="last">If others&#8217; acks to our <code class="docutils literal"><span class="pre">FIN</span></code> are blocked, then we will never be sure that
+it&#8217;s safe to publish our signature key. This likely can&#8217;t be defended under
+this type of scheme, since confidential authenticity isn&#8217;t meaningful without
+authenticity (it would be &#8220;confidential nothing&#8221;); the equivalent attack also
+applies to OTR. To defend against this, we would need a session establishment
+protocol that is itself deniable, and then we don&#8217;t need to mess around with
+publishing keys; see &#8220;Better membership change protocol&#8221; below.</p>
+</dd>
+</dl>
+<table class="docutils footnote" frame="void" id="rtry" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Users may manually retry rejected operations as many times as they
+want, and it would be extremely suspicious if it is rejected too often. Note
+that automatic retries are a security risk.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section" id="next-steps">
+<h2>6.2. Next steps<a class="headerlink" href="#next-steps" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="security-improvements">
+<h3>6.2.1. Security improvements<a class="headerlink" href="#security-improvements" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>Messaging ratchet for intra-subsession forward secrecy</dt>
+<dd><p class="first">We already have forward secrecy for old subsessions, but this is important
+for long-running subsessions and later when we do asynchronous messaging.</p>
+<p class="last">One simple scheme is to deterministically split the key into <span class="math">\(n\)</span> keys,
+one for each sender. Then, each key can be used to seed a hash-chain ratchet
+for its associated sender. Once all readers have decrypted a packet and
+deleted the key, the forward secrecy of messages encrypted with that key and
+previous ones is ensured. However, since this scheme does not distribute
+entropy between members, there is no chance to recover from a memory leak and
+try to regain secrecy for future messages.</p>
+</dd>
+<dt>Better membership change protocol</dt>
+<dd>Use a constant-round group key exchange such as that from <a class="reference internal" href="references.html#np1sec" id="id2">[np1sec]</a>, or even
+pairwise <a class="reference internal" href="references.html#triple-dh" id="id3">[Triple-DH]</a> between all group members which extends better to
+asynchronous messaging. In both cases, we get deniability for free without
+having to publish signature keys for messages.</dd>
+<dt>Use peer-to-peer or anonymous transport for non-GKA messages</dt>
+<dd>The only part of our system that requires a linear ordering is the membership
+operation packets. So it is possible to move message packets into a transport
+that gives us better properties (e.g. against metadata analysis) than XMPP.</dd>
+</dl>
+</div>
+<div class="section" id="more-functionality">
+<h3>6.2.2. More functionality<a class="headerlink" href="#more-functionality" title="Permalink to this headline">¶</a></h3>
+<dl class="docutils">
+<dt>Large messages and file transfer</dt>
+<dd>Our current padding scheme limits messages to roughly <span class="math">\(2^{16}\)</span> bytes,
+to keep it under our XMPP server maximum stanza size. This may be extended to
+arbitrary sizes: pad to the next-power-of-2-multiple of the maximum size, and
+split this into MTU-sized packets. (This is just a functionality improvement;
+these padding schemes have not been researched from an adversarial model.)
+After this, it is a straightforward engineering task to allow file transfers.</dd>
+<dt>Better multi-device support</dt>
+<dd><p class="first">A group messaging system can already be used for multiple devices in a very
+basic way &#8211; simply have each device join the session as a separate member.
+This is desireable for security reasons, since it means we can avoid sharing
+ephemeral keys. It&#8217;s unclear whether devices should share identity keys, or
+use different identity keys and have the PKI layer bind them to say &#8220;we are
+the same identity&#8221;, but this decision doesn&#8217;t affect our messaging system.</p>
+<p>Beyond this, we can add some things both in the messaging layer and in the UI
+layer to make the experience smoother for users.</p>
+<ul class="simple">
+<li>The users view should show one entry per user, not per device;</li>
+<li>Not-fully-acked warnings may be tweaked to only require one ack from every
+<em>user</em> rather than every device. However, a warning should probably fired
+eventually even if all devices don&#8217;t ack it, just later than in the single
+device case; it is still a critical security error if different devices get
+<em>different</em> content. Similar logic may be applied to heartbeats;</li>
+<li>There are extra corner cases in the browser case, where the user may open
+several tabs (each acting as a separate device), with crashes and page
+reloads causing churn that might reveal implementation bugs.</li>
+</ul>
+<p class="last">(We are already doing some of the above.)</p>
+</dd>
+<dt>Sync old session history across devices</dt>
+<dd><p class="first">It is unnecessary to reuse security credentials (e.g. shared group keys or
+session keys) that are linked to others &#8211; we already decrypted the packets
+and don&#8217;t need to do this again. Futher, credentials in modern protocols are
+supposed to be ephemeral, and this is a vital part of their security. If we
+retain such credentials, we may put others at risk or leave forensic traces
+of our own activities.</p>
+<p class="last">Therefore, our sync mechanism must not directly reuse ciphertext from our
+messaging protocol, since it forces us to store these credentials. It is much
+better to re-encrypt the plaintext under our own keys, unlinked to anyone
+else. That is, <em>at the very least</em>, this feature must be a separate protocol;
+the security model here is <em>private storage</em> for oneself, and <em>not</em> private
+communications. Finally, even following this requirement, long-term storage
+of encrypted data directly counteracts forward secrecy, so the user must be
+made aware of this before such a feature is enabled.</p>
+</dd>
+</dl>
+</div>
+</div>
+<div class="section" id="research">
+<h2>6.3. Research<a class="headerlink" href="#research" title="Permalink to this headline">¶</a></h2>
+<p>Here are some research topics for the future for which we have no concrete
+solution proposals, though we do have some vague suggestions.</p>
+<p>Several of these relate to &#8220;no-compromise&#8221; asynchronous messaging, i.e. with
+causal ordering, no breaking of symmetry between members, no requirement of
+temporary synchronity or total ordering, no accept-reject mechanisms, and no
+dependency on external infrastructure.</p>
+<dl class="docutils">
+<dt>Merging under partial visibility</dt>
+<dd>As mentioned earlier, our membership operations are in a total order because
+nobody has defined how to merge two group key agreements. This problem has a
+well-defined solution for pairwise key agreements, but only if everyone can
+see all history, or if only member inclusions are allowed (or generally, if
+the operations to be merged have no inverse). If we have partial visibility
+(i.e. members can&#8217;t see events from before they join) <em>and</em> we want to
+support both member inclusion and exclusion, the solution is unknown.</dd>
+<dt>Session rejoin semantics</dt>
+<dd>As part of solving the above point, we need to decide what parent references
+mean exactly in the context of rejoining a session. Existing members&#8217; parent
+references to older messages won&#8217;t make sense to us since we can&#8217;t see them;
+symmetrically, we might want to reference the last messages we saw before
+previously leaving the session, but these references might not make sense to
+some of the existing members, i.e. those not present when we parted.</dd>
+<dt>Possible hybrid solution</dt>
+<dd>One possible solution is to allow causally-ordered member inclusion, but
+require that everyone acknowledge a member exclusion before it is considered
+complete. Then our partial visibility problem disappears; new members don&#8217;t
+have to worry about how to merge in excludes that happened before they joined
+&#8211; their inviter will have already taken this into account. This is probably
+the least non-zero &#8220;compromise&#8221; solution, but the agreement mechanism might
+itself be very complex.</dd>
+<dt>Save and load current session</dt>
+<dd><p class="first">This is vital for asynchronous messaging, and would be a straightforward but
+significant engineering effort on top of our existing implementation.</p>
+<p class="last">One optimisation to be made after the basic ability is complete, is to prune
+older messages from our transcript and message-log data structures. This must
+be thought through carefully, since we need a limited set of history in order
+to perform ratcheting, check the full-ack status of messages and freshness of
+other members, and merge concurrent membership operations.</p>
+</dd>
+<dt>Membership change <em>policy</em> protocol</dt>
+<dd>This ought to be layered on top of a membership change <em>mechanism</em> protocol.
+When reasoning about security, naturally one considers who is allowed to do
+what. But authorization is a separate issue from <em>how to execute membership
+changes</em>. We should solve the latter first, assuming that all members are
+allowed to make any change (in many cases this is exactly what is desired),
+<em>then</em> think about how to construct a secure mechanism to restrict these
+operations based on some user-defined policy. This is the same reason why we
+generally perform authentication before, and separately from, authorization.</dd>
+</dl>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/Mega_logo_gradient.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">6. Future work</a><ul>
+<li><a class="reference internal" href="#immediate">6.1. Immediate</a><ul>
+<li><a class="reference internal" href="#missing-properties">6.1.1. Missing properties</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#next-steps">6.2. Next steps</a><ul>
+<li><a class="reference internal" href="#security-improvements">6.2.1. Security improvements</a></li>
+<li><a class="reference internal" href="#more-functionality">6.2.2. More functionality</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#research">6.3. Research</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="crypto_aske.html"
+                        title="previous chapter">5.2.2. Authenticated Signature Key Exchange (ASKE)</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="references.html"
+                        title="next chapter">7. References</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/future-work.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="references.html" title="7. References"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="crypto_aske.html" title="5.2.2. Authenticated Signature Key Exchange (ASKE)"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; <a href="copyright.html">Copyright</a> 2015, Mega Limited, Auckland, New Zealand.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>7. References &mdash; Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/project.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1-4-g75e6b2d',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="copyright" title="Copyright" href="copyright.html" />
+    <link rel="top" title="Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d" href="index.html" />
+    <link rel="prev" title="6. Future work" href="future-work.html" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            "HTML-CSS": {
+                // switch this off, it tends to make fonts too large
+                matchFontHeight: false,
+                // see https://docs.mathjax.org/en/v2.5-latest/options/HTML-CSS.html for valid values
+                // most other ones don't look so good with the surrounding sans-serif Sphinx text
+                availableFonts: ["Neo-Euler"],
+                preferredFont: "Neo-Euler",
+                webFont: "Neo-Euler",
+            },
+        });
+    </script>
+
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="future-work.html" title="6. Future work"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="references">
+<h1>7. References<a class="headerlink" href="#references" title="Permalink to this headline">¶</a></h1>
+</div>
+<table class="docutils citation" frame="void" id="otr-spec" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[OTR-spec]</td><td><div class="first last line-block">
+<div class="line">Off-the-Record Messaging Protocol version 3.</div>
+<div class="line"><a class="reference external" href="https://otr.cypherpunks.ca/Protocol-v3-4.0.0.html">https://otr.cypherpunks.ca/Protocol-v3-4.0.0.html</a> 2013-09-28</div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="np1sec" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[np1sec]</td><td><div class="first last line-block">
+<div class="line">(n+1)sec, a secure multi-party communication protocol.</div>
+<div class="line">Work in progress.</div>
+<div class="line"><a class="reference external" href="https://learn.equalit.ie/wiki/Np1sec">https://learn.equalit.ie/wiki/Np1sec</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="triple-dh" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[Triple-DH]</td><td><div class="first last line-block">
+<div class="line">Triple Diffie-Hellman key exchange.</div>
+<div class="line">Work in progress.</div>
+<div class="line"><a class="reference external" href="https://github.com/trevp/tripledh/blob/5d114646/tripledh.md">https://github.com/trevp/tripledh/blob/5d114646/tripledh.md</a> 2014-10-29</div>
+<div class="line"><a class="reference external" href="https://moderncrypto.org/mail-archive/curves/2014/000107.html">https://moderncrypto.org/mail-archive/curves/2014/000107.html</a> 2014-04</div>
+<div class="line"><a class="reference external" href="https://whispersystems.org/blog/simplifying-otr-deniability/">https://whispersystems.org/blog/simplifying-otr-deniability/</a> 2013-07-27</div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="cliq" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[00CLIQ]</td><td><div class="first last line-block">
+<div class="line">M. Steiner, G. Tsudik, and M. Waidner.
+<em>Key Agreement in Dynamic Peer Groups</em>.</div>
+<div class="line">IEEE Trans. Parallel Distrib. Syst. 11, 8 (August 2000), 769-780.
+DOI=10.1109/71.877936</div>
+<div class="line"><a class="reference external" href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.51.890&amp;rep=rep1&amp;type=pdf">http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.51.890&amp;rep=rep1&amp;type=pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="spag" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[03SPAG]</td><td><div class="first last line-block">
+<div class="line">J. Katz, M. Yung.
+<em>Scalable Protocols for Authenticated Group Key Exchange</em></div>
+<div class="line">Journal of Cryptology 20(1): 85-113, 2007.</div>
+<div class="line">First appeared in: Advances in Cryptology &#8211; Crypto 2003, LNCS vol. 2729.</div>
+<div class="line"><a class="reference external" href="https://www.cs.umd.edu/~jkatz/papers/multi-auth-full.pdf">https://www.cs.umd.edu/~jkatz/papers/multi-auth-full.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="otrc" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[04OTRC]</td><td><div class="first last line-block">
+<div class="line">N. Borisov, I. Goldberg, and E. Brewer.
+<em>Off-the-record communication, or, why not to use PGP</em>.</div>
+<div class="line">Proceedings of the 2004 ACM workshop on Privacy in the Electronic Society (WPES) 2004.</div>
+<div class="line"><a class="reference external" href="http://www.cypherpunks.ca/otr/otr-wpes.pdf">http://www.cypherpunks.ca/otr/otr-wpes.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="robo" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[06ROBO]</td><td><div class="first last line-block">
+<div class="line">M. Miller.
+<em>Robust Composition: Towards a Unified Approach to Access Control and Concurrency Control</em>.</div>
+<div class="line">Ph.D. thesis, Johns Hopkins University.</div>
+<div class="line"><a class="reference external" href="http://www.erights.org/talks/thesis/markm-thesis.pdf">http://www.erights.org/talks/thesis/markm-thesis.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="dgka" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[06DGKA]</td><td><div class="first last line-block">
+<div class="line">J.-M. Bohli and R. Steinwandt.
+<em>Deniable Group Key Agreement</em>.</div>
+<div class="line">Progress in Cryptology &#8211; VIETCRYPT 2006: 298-311</div>
+<div class="line"><a class="reference external" href="http://bib.tiera.ru/b/75355">http://bib.tiera.ru/b/75355</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="mcic" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[08MCIC]</td><td><div class="first last line-block">
+<div class="line">S. Gianvecchio, M. Xie, Z. Wu, and H. Wang.
+<em>Measurement and classification of humans and bots in internet chat</em>.</div>
+<div class="line">Proceedings of the 17th USENIX Security Symposium (Security 2008).</div>
+<div class="line"><a class="reference external" href="http://usenix.org/event/sec08/tech/full_papers/gianvecchio/gianvecchio.pdf">http://usenix.org/event/sec08/tech/full_papers/gianvecchio/gianvecchio.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="mpom" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[09MPOM]</td><td><div class="first last line-block">
+<div class="line">I. Goldberg, B. Ustaoglu, M. D. Van Gundy, and H. Chen.
+<em>Multi-party Off-the-Record Messaging</em>.</div>
+<div class="line">Proceedings of the 16th ACM conference on Computer and Communications Security (CCS) 2009.</div>
+<div class="line"><a class="reference external" href="http://www.cypherpunks.ca/~iang/pubs/mpotr.pdf">http://www.cypherpunks.ca/~iang/pubs/mpotr.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="ssek" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[11SSEK]</td><td><div class="first last line-block">
+<div class="line">C. J. F. Cremers.
+<em>Session-state Reveal is stronger than eCK&#8217;s Ephemeral Key Reveal: Using
+automatic analysis to attack the NAXOS protocol</em>.</div>
+<div class="line">Unpublished amendment by original author.</div>
+<div class="line">First appeared in: International Journal of Applied Cryptography (IJACT), 2010.</div>
+<div class="line"><a class="reference external" href="https://www.cs.ox.ac.uk/people/cas.cremers/downloads/papers/Cr2010-naxos_automatic.pdf">https://www.cs.ox.ac.uk/people/cas.cremers/downloads/papers/Cr2010-naxos_automatic.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="sdgk" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[12SDGK]</td><td><div class="first last line-block">
+<div class="line">K. Neupane, R. Steinwandt, and A. S. Corona.
+<em>Scalable Deniable Group Key Establishment</em></div>
+<div class="line">5th International Symposium, Foundations and Practice of Security (FPS) 2012.</div>
+<div class="line"><a class="reference external" href="https://eprint.iacr.org/2012/504.pdf">https://eprint.iacr.org/2012/504.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="oblu" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[12OBLU]</td><td><div class="first last line-block">
+<div class="line">M. D. Van Gundy and H. Chen.
+<em>OldBlue: Causal Broadcast In A Mutually Suspicious Environment</em>.</div>
+<div class="line">Unpublished.</div>
+<div class="line"><a class="reference external" href="http://matt.singlethink.net/projects/mpotr/oldblue-draft.pdf">http://matt.singlethink.net/projects/mpotr/oldblue-draft.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="dske" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[13DSKE]</td><td><div class="first last line-block">
+<div class="line">M. D. Van Gundy.
+<em>Improved Deniable Signature Key Exchange for mpOTR</em>.</div>
+<div class="line">Unpublished.</div>
+<div class="line"><a class="reference external" href="http://matt.singlethink.net/projects/mpotr/improved-dske.pdf">http://matt.singlethink.net/projects/mpotr/improved-dske.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="gotr" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[13GOTR]</td><td><div class="first last line-block">
+<div class="line">H. Liu, E. Y. Vasserman, and N. Hopper
+<em>Improved Group Off-the-Record Messaging</em></div>
+<div class="line">Workshop on Privacy in the Electronic Society (WPES) 2013.</div>
+<div class="line"><a class="reference external" href="http://www-users.cs.umn.edu/~hopper/gotr.pdf">http://www-users.cs.umn.edu/~hopper/gotr.pdf</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="mpenc-api" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[mpenc-api]</td><td><div class="first last line-block">
+<div class="line">Multi-Party Encrypted Messaging Protocol, API documentation.</div>
+<div class="line">TO BE PUBLISHED.</div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="msg-notes" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[msg-notes]</td><td><em>(<a class="fn-backref" href="#id1">1</a>, <a class="fn-backref" href="#id2">2</a>, <a class="fn-backref" href="#id3">3</a>, <a class="fn-backref" href="#id4">4</a>, <a class="fn-backref" href="#id5">5</a>, <a class="fn-backref" href="#id6">6</a>)</em> <div class="last line-block">
+<div class="line">Topics in secure messaging systems. Work in progress.</div>
+<div class="line"><a class="reference external" href="https://infinity0.github.io/msg-notes/">https://infinity0.github.io/msg-notes/</a></div>
+<div class="line"><a class="reference external" href="https://github.com/infinity0/msg-notes/">https://github.com/infinity0/msg-notes/</a> latest version</div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="msg-2i0" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[msg-2i0]</td><td><div class="first last line-block">
+<div class="line"><a class="reference internal" href="#msg-notes" id="id1">[msg-notes]</a> Causal ordering.</div>
+<div class="line"><a class="reference external" href="https://infinity0.github.io/msg-notes/causal/index.html">https://infinity0.github.io/msg-notes/causal/index.html</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="msg-2o0" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[msg-2o0]</td><td><div class="first last line-block">
+<div class="line"><a class="reference internal" href="#msg-notes" id="id2">[msg-notes]</a> Causal ordering, Ordering.</div>
+<div class="line"><a class="reference external" href="https://infinity0.github.io/msg-notes/causal/01-ordering.html">https://infinity0.github.io/msg-notes/causal/01-ordering.html</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="msg-2oo" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[msg-2oo]</td><td><div class="first last line-block">
+<div class="line"><a class="reference internal" href="#msg-notes" id="id3">[msg-notes]</a> Causal ordering, Ordering, The importance of strong ordering.</div>
+<div class="line"><a class="reference external" href="https://infinity0.github.io/msg-notes/causal/01-ordering.html#the-importance-of-strong-ordering">https://infinity0.github.io/msg-notes/causal/01-ordering.html#the-importance-of-strong-ordering</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="msg-2c0" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[msg-2c0]</td><td><div class="first last line-block">
+<div class="line"><a class="reference internal" href="#msg-notes" id="id4">[msg-notes]</a> Causal ordering, Consistency.</div>
+<div class="line"><a class="reference external" href="https://infinity0.github.io/msg-notes/causal/02-consistency.html">https://infinity0.github.io/msg-notes/causal/02-consistency.html</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="msg-hci" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[msg-hci]</td><td><div class="first last line-block">
+<div class="line"><a class="reference internal" href="#msg-notes" id="id5">[msg-notes]</a> Human-computer interaction.</div>
+<div class="line"><a class="reference external" href="https://infinity0.github.io/msg-notes/hci.html">https://infinity0.github.io/msg-notes/hci.html</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="msa-5h0" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label">[msa-5h0]</td><td><div class="first last line-block">
+<div class="line"><a class="reference internal" href="#msg-notes" id="id6">[msg-notes]</a> Appendix, Hybrid ordering.</div>
+<div class="line"><a class="reference external" href="https://infinity0.github.io/msg-notes/appendix/05-hybrid.html">https://infinity0.github.io/msg-notes/appendix/05-hybrid.html</a></div>
+</div>
+</td></tr>
+</tbody>
+</table>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/Mega_logo_gradient.png" alt="Logo"/>
+            </a></p>
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="future-work.html"
+                        title="previous chapter">6. Future work</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/references.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="future-work.html" title="6. Future work"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; <a href="copyright.html">Copyright</a> 2015, Mega Limited, Auckland, New Zealand.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>

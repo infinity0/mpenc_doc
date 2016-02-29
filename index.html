@@ -1,0 +1,211 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Multi-Party Encrypted Messaging Protocol &mdash; Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/project.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1-4-g75e6b2d',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="copyright" title="Copyright" href="copyright.html" />
+    <link rel="top" title="Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d" href="#" />
+    <link rel="next" title="1. Background" href="background.html" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            "HTML-CSS": {
+                // switch this off, it tends to make fonts too large
+                matchFontHeight: false,
+                // see https://docs.mathjax.org/en/v2.5-latest/options/HTML-CSS.html for valid values
+                // most other ones don't look so good with the surrounding sans-serif Sphinx text
+                availableFonts: ["Neo-Euler"],
+                preferredFont: "Neo-Euler",
+                webFont: "Neo-Euler",
+            },
+        });
+    </script>
+
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="background.html" title="1. Background"
+             accesskey="N">next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="multi-party-encrypted-messaging-protocol">
+<h1>Multi-Party Encrypted Messaging Protocol<a class="headerlink" href="#multi-party-encrypted-messaging-protocol" title="Permalink to this headline">¶</a></h1>
+<p>This document is a technical overview and discussion of our work, a protocol
+for secure group messaging. By <em>secure</em> we mean for the actual users i.e.
+end-to-end security, as opposed to &#8220;secure&#8221; for irrelevant third parties.</p>
+<p>Our work provides everything needed to run a messaging session between real
+users on top of a real transport protocol. That is, we specify not just a key
+exchange, but when and how to run these relative to transport-layer events; how
+to achieve <em>liveness properties</em> such as reliability and consistency, that are
+time-sensitive and lie outside of the send-receive logic that cryptography-only
+protocols often restrict themselves to; and offer suggestions for displaying
+accurate (i.e. secure) but not overwhelming information in user interfaces.</p>
+<p>We aim towards a general-purpose unified protocol. In other words, we&#8217;d prefer
+to avoid creating a completely new protocol merely to support automation, or
+asynchronity, or a different transport protocol. This would add complexity to
+the overall ecosystem of communications protocols. It is simply unnecessary if
+the original protocol is designed well, as we have tried to do.</p>
+<p>That aim is not complete &#8211; our full protocol system, as currently implemented,
+is suitable only for use with certain instant messaging protocols. However, we
+have tried to separate out conceptually-independent concerns, and solve these
+individually using minimal assumptions even if other components make extra
+assumptions. This means that many components of our full system can be reused
+in future protocol extensions, and we know exactly which components must be
+replaced in order to lift the existing constraints on our full system.</p>
+<p>Our main implementation is a JavaScript library; an initial version is awaiting
+integration into the MEGA web chat platform. We also have a Python reference
+prototype that is semi-functional but omits real cryptographic algorithms. Both
+our design and implementation need external review. To that end, this document
+contains high-level descriptions of each, and we have also published source
+code and API documentation under the free open source software AGPL-3 license.</p>
+<p>In chapters 1 and 2, we explore topics in secure group messaging in general,
+then apply these to our work and justify our design choices. In chapter 3, we
+present our full protocol system, including our chosen separations of concerns
+and how we achieve various security properties. In chapter 4, we describe our
+implementation, including our software architecture, along with paradigms we
+employ in lower-level utilities. In chapter 5, we detail our crytographic
+algorithms and our packet format. Finally in chapter 6, we outline future work,
+both for the immediate short term as well as long-term research objectives.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="background.html">1. Background</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="background.html#model-and-mechanics">1.1. Model and mechanics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="background.html#security-properties">1.2. Security properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="background.html#threat-models">1.3. Threat models</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="topics.html">2. Topics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="topics.html#security-goals">2.1. Security goals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="topics.html#distributed-systems">2.2. Distributed systems</a></li>
+<li class="toctree-l2"><a class="reference internal" href="topics.html#user-experience">2.3. User experience</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="protocol.html">3. Protocol</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="protocol.html#session-overview">3.1. Session overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol.html#group-key-agreement">3.2. Group key agreement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol.html#transport-integration">3.3. Transport integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol.html#message-ordering">3.4. Message ordering</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol.html#reliability-and-consistency">3.5. Reliability and consistency</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol.html#message-encryption">3.6. Message encryption</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="engineering.html">4. Engineering</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="engineering.html#public-interface">4.1. Public interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="engineering.html#session-architecture">4.2. Session architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="engineering.html#internal-components">4.3. Internal components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="engineering.html#utilities">4.4. Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="crypto.html">5. Cryptography</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="crypto.html#packet-overview">5.1. Packet overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto.html#membership-changes">5.2. Membership changes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto.html#messages">5.3. Messages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="crypto.html#encoding-and-primitives">5.4. Encoding and primitives</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="future-work.html">6. Future work</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="future-work.html#immediate">6.1. Immediate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="future-work.html#next-steps">6.2. Next steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="future-work.html#research">6.3. Research</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">7. References</a></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="#">
+              <img class="logo" src="_static/Mega_logo_gradient.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Multi-Party Encrypted Messaging Protocol</a><ul>
+</ul>
+</li>
+</ul>
+
+  <h4>Next topic</h4>
+  <p class="topless"><a href="background.html"
+                        title="next chapter">1. Background</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="background.html" title="1. Background"
+             >next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">Multi-Party Encrypted Messaging Protocol design document 0.1-4-g75e6b2d</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; <a href="copyright.html">Copyright</a> 2015, Mega Limited, Auckland, New Zealand.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.5.
+    </div>
+  </body>
+</html>
